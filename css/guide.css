@@ -199,6 +199,7 @@ table.soldlist { margin-top:8px; opacity:.7; }
 table.soldlist .nm { text-decoration:line-through; color:var(--soft); }
 
 /* ---------------- mini clock strip + room budgets ---------------- */
+.oc-mini[hidden] { display:none; }
 .oc-mini { position:sticky; top:var(--topH,52px); z-index:18; margin:0 12px; padding:8px 12px; display:flex; align-items:baseline; gap:10px; background:linear-gradient(180deg,#1a2440,#111a2e); border:1px solid var(--line2); border-left:5px solid var(--red); border-radius:0 0 5px 5px; box-shadow:0 10px 24px rgba(0,0,0,.5); cursor:pointer; }
 .oc-mini.go { border-left-color:var(--green); } .oc-mini.stop { border-left-color:var(--red); }
 .oc-mini .mn { font-family:var(--display); font-weight:800; font-size:18px; text-transform:uppercase; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
