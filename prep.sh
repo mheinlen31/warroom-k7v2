@@ -3,6 +3,8 @@
 # publish. Run any time before the draft; the live room does the rest.
 set -e
 cd "$(dirname "$0")"
+echo "==> syncing team logos"
+cp ../sunday-funday/js/logos.js js/logos.js
 echo "==> pulling ESPN pool with projections"
 python3 build_players.py
 echo "==> cache-busting"
