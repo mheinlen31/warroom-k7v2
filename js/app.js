@@ -216,12 +216,13 @@
 
   function renderTargets() {
     if (!R || !R.me || !R.me.targets.length) { $('targets').innerHTML = ''; return; }
-    $('targets').innerHTML = `<div class="tgrid">${R.me.targets.map((t) => `
+    $('targets').innerHTML = `<div class="tcap">Best value for <b>your</b> board · legal for the slot · inside your max bid · ranked by what you'd save vs the room</div>
+      <div class="tgrid">${R.me.targets.map((t) => `
       <div class="tslot">
-        <h5>${esc(t.slot)} · best value left</h5>
+        <h5>${esc(t.slot)} · best value for you</h5>
         ${t.cands.length ? t.cands.map((p) => `
-          <div class="tc"><span class="nm">${esc(p.name)}</span>
-            <span class="pr">${money(p.model)}<small>mkt ${money(p.mkt)}</small></span></div>`).join('')
+          <div class="tc${p.stretch ? ' stretch' : ''}"><span class="nm">${esc(p.name)}${p.byeClash ? `<i class="clash" title="same bye as ${esc(p.byeClash)}">bye ${p.bye} · same as ${esc(p.byeClash.split(' ').pop())}</i>` : ''}${p.stretch ? '<i class="clash st">over your max</i>' : ''}</span>
+            <span class="pr">${money(p.model)}<small>mkt ${money(p.mkt)}</small>${edgeHtml(p.edge)}</span></div>`).join('')
           : '<div class="tc"><span class="nm" style="color:var(--faint)">nobody left</span></div>'}
       </div>`).join('')}</div>`;
   }

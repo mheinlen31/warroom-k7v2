@@ -196,11 +196,30 @@ window.GuideModel = (function () {
     if (mine) {
       const { t, st } = mine;
       const openSlots = E.SLOTS.filter((sl) => !st.slots[sl.id]);
-      const targets = openSlots.filter((sl) => sl.takes).map((sl) => ({
-        slot: sl.label, id: sl.id,
-        cands: avail.filter((p) => sl.takes.includes(p.pos) && E.canRoster(t, p.pos).ok)
-          .sort((a, b) => b.vor - a.vor).slice(0, 3),
-      }));
+      // "Best value" is judged against THIS roster, not the league: legal for
+      // the slot, inside this team's max bid, ranked by what it would save
+      // against the room's likely price (edge), then by talent. If fewer than
+      // three fit the money, the list is topped up by talent and those are
+      // marked as a stretch. A bye shared with a starter already rostered at
+      // the position is flagged too -- that's a real cost on draft night.
+      const rostered = (t.players || []).map((p) => {
+        const ref = pool.find((x) => norm(x.name) === norm(p.name));
+        return { pos: p.pos, name: p.name, bye: ref ? ref.bye : null };
+      });
+      const clash = (p) => rostered.find((r) => r.bye && r.bye === p.bye && r.pos === p.pos);
+      const targets = openSlots.filter((sl) => sl.takes).map((sl) => {
+        const talent = avail.filter((p) => sl.takes.includes(p.pos) && E.canRoster(t, p.pos).ok)
+          .sort((a, b) => b.vor - a.vor);
+        const afford = (p) => p.model <= st.maxBid;
+        // starter-caliber names first (top 15 by talent), best edge among those I can pay for
+        const picks = talent.slice(0, 15).filter(afford)
+          .sort((a, b) => (b.edge - a.edge) || (b.vor - a.vor)).slice(0, 3);
+        const fill = (src) => src.filter((p) => !picks.includes(p)).slice(0, 3 - picks.length).forEach((p) => picks.push(p));
+        if (picks.length < 3) fill(talent.filter(afford));   // money is tight: best I can actually pay for
+        if (picks.length < 3) fill(talent);                   // still short: show the talent, marked over max
+        return { slot: sl.label, id: sl.id,
+                 cands: picks.map((p) => ({ ...p, stretch: p.model > st.maxBid, byeClash: (clash(p) || {}).name || null })) };
+      });
       me = { name: t.name, remaining: st.remaining, maxBid: st.maxBid, open: st.open,
              tax: st.tax, needs: openSlots.map((sl) => sl.label), targets,
              avgPerOpen: st.avgPerOpen, benchOpen: openSlots.filter((sl) => !sl.takes).length };
