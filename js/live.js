@@ -38,6 +38,7 @@ window.LiveDraft = (function () {
     st.teams = asArray(st.teams);
     st.teams.forEach((t) => { t.players = asArray(t.players); t.keeperPool = asArray(t.keeperPool); });
     st.picks = asArray(st.picks);
+    st.nomOrder = asArray(st.nomOrder); st.nomOffset = +st.nomOffset || 0;
     return st;
   }
 

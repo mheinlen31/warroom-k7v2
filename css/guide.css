@@ -237,3 +237,8 @@ td.you.up { color:var(--green); } td.you.down { color:var(--faint); }
 table.rb .tneeds { white-space:normal; line-height:1.25; margin-top:1px; font-family:var(--display); }
 table.rb .tneeds i { font-style:normal; font-size:9.5px; font-weight:800; letter-spacing:.06em; margin-right:5px; color:var(--soft); }
 table.rb .tneeds i.done { color:var(--faint); font-weight:600; letter-spacing:.02em; text-transform:none; }
+
+.dr .drv b.ok { color:var(--green); } .dr .drv b.warn { color:#ffb35c; } .dr .drv b.soft { color:var(--soft); font-size:12px; font-family:var(--data); font-weight:600; }
+.tc .nm i.clash.ok { color:var(--green); } .tc .nm i.clash.ct { color:#ffb35c; }
+.sc .t { font-size:9.5px; font-weight:800; letter-spacing:.06em; margin-top:2px; } .sc .t.hot { color:#ffb35c; } .sc .t.cold { color:var(--green); }
+.fact.nom { margin-top:6px; color:var(--gold); } .fact.nom b { color:var(--gold); }

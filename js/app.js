@@ -113,6 +113,7 @@
           ${paid.n >= 5 ? `<div class="stat"><b>${paid.ratio.toFixed(2)}×</b><span>paying vs ESPN</span></div>` : ''}
         </div>
         ${run ? `<div class="fact run"><b>${esc(run.pos)} run</b> — ${run.n} of the last 5 picks</div>` : ''}
+        ${L.nominator ? `<div class="fact nom"><b>${esc(L.nominator)}</b> nominates${L.untilMe === 0 ? " — that's you" : L.untilMe != null ? ` · you're up in ${L.untilMe}` : ''}</div>` : ''}
       </div>`;
     const scar = `
       <div class="card">
@@ -122,6 +123,7 @@
             <div class="p ${posClass(pos)}">${pos}</div>
             <div class="n">${s.solid}<small> / ${Math.round(s.demand)}</small></div>
             <div class="l">${s.label}</div>
+            ${L.tilt && L.tilt[pos] && L.tilt[pos].n >= 3 && Math.abs(L.tilt[pos].x - 1) >= 0.08 ? `<div class="t ${L.tilt[pos].x > 1 ? 'hot' : 'cold'}">paying ${L.tilt[pos].x.toFixed(2)}×</div>` : ''}
           </div>`; }).join('')}</div>
       </div>`;
     $('cockpit').innerHTML = seat + league + scar;
@@ -168,6 +170,22 @@
         : '<div class="fact">Nothing left worth draining.</div>'}
     </div>`;
 
+    // ---- nominate now ----
+    const nn = me_.nominateNow || [];
+    const nomCard = `<div class="card">
+      <h4>Nominate now · your targets with the clearest path</h4>
+      ${nn.length ? nn.map((p) => `<div class="dr"><span class="nm">${esc(p.name)}</span><span class="pos ${posClass(p.pos)}">${esc(p.pos)}</span>
+        <span class="drv">${p.contest ? `<b class="warn">${p.contest}</b> hunting${p.contestBy.length ? ` (${esc(p.contestBy.slice(0, 2).join(', '))}${p.contestBy.length > 2 ? ` +${p.contestBy.length - 2}` : ''})` : ''}` : '<b class="ok">clear path</b>'} · you $${p.payTo} · room $${p.mkt}</span></div>`).join('')
+        : '<div class="fact">Nothing on your list has a clear path yet — drain instead.</div>'}
+    </div>`;
+    // ---- $1 fliers ----
+    const fl = me_.fliers || [];
+    const flierCard = me_.benchOpen ? `<div class="card">
+      <h4>$1 fliers · bench upside when the money's gone</h4>
+      ${fl.length ? fl.map((p) => `<div class="dr"><span class="nm">${esc(p.name)}</span><span class="pos ${posClass(p.pos)}">${esc(p.pos)}</span>
+        <span class="drv">${p.tags.length ? `<b class="${p.cuff ? 'ok' : 'soft'}">${esc(p.tags.join(' · '))}</b> · ` : ''}proj ${p.proj.toFixed(0)}</span></div>`).join('')
+        : '<div class="fact">No $1 upside left.</div>'}
+    </div>` : '';
     // ---- roster ----
     const slotsHtml = st ? E.SLOTS.map((sl) => { const p = st.slots[sl.id];
       return `<div class="rs${p ? '' : ' open'}"><span class="ps ${p ? posClass(p.pos) : ''}">${esc(sl.label)}</span><span class="rn">${p ? esc(p.name) : '—'}</span><span class="rc">${p ? '$' + p.cost : ''}</span></div>`; }).join('') : '';
@@ -181,7 +199,7 @@
       <table class="rb">${R.teams.slice().sort((a, b) => b.remaining - a.remaining).map((t) => `
         <tr class="${t.name === me ? 'me' : ''}"><td class="tn">${esc(t.name)}<div class="tneeds">${(t.needs || []).length ? t.needs.map((n) => `<i class="${posClass(n)}">${esc(n)}</i>`).join('') : '<i class="done">starters set</i>'}</div></td><td class="tl">$${t.remaining}</td><td class="tm">max $${t.maxBid}</td><td class="to">${t.open} open</td></tr>`).join('')}</table>
     </div>`;
-    box.innerHTML = plan + drainCard + roster + budgets;
+    box.innerHTML = plan + nomCard + drainCard + flierCard + roster + budgets;
   }
 
   function renderTargets() {
@@ -191,7 +209,7 @@
       <div class="tslot">
         <h5>${esc(t.slot)} · best value for you</h5>
         ${t.cands.length ? t.cands.map((p) => `
-          <div class="tc${p.stretch ? ' stretch' : ''}"><span class="nm">${esc(p.name)}${p.byeClash ? `<i class="clash" title="same bye as ${esc(p.byeClash)}">bye ${p.bye} · same as ${esc(p.byeClash.split(' ').pop())}</i>` : ''}${p.stretch ? '<i class="clash st">room price is over your max</i>' : ''}</span>
+          <div class="tc${p.stretch ? ' stretch' : ''}"><span class="nm">${esc(p.name)}${p.byeClash ? `<i class="clash" title="same bye as ${esc(p.byeClash)}">bye ${p.bye} · same as ${esc(p.byeClash.split(' ').pop())}</i>` : ''}${p.stretch ? '<i class="clash st">room price is over your max</i>' : ''}${p.contest === 0 ? '<i class="clash ok">clear path</i>' : p.contest >= 2 ? `<i class="clash ct">${p.contest} hunting · ${esc(p.contestBy.slice(0, 2).join(', '))}</i>` : ''}</span>
             <span class="pr">${money(p.payTo)}<small>you · room ${money(p.mkt)}</small>${edgeHtml(p.youEdge)}</span></div>`).join('')
           : '<div class="tc"><span class="nm" style="color:var(--faint)">nobody left</span></div>'}
       </div>`).join('')}</div>`;

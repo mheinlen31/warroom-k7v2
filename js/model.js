@@ -141,9 +141,29 @@ window.GuideModel = (function () {
     // clamped: with a handful of $1 spots left the ratio is noise
     const inflation = openSpots ? Math.min(1.8, Math.max(0.6, moneyLeft / mktValue)) : 1;
 
+    // ---- what the room is paying by position TONIGHT ----
+    // Realized price against ESPN value per position, shrunk toward the
+    // room-wide ratio until a position has shown enough sales (six picks'
+    // worth of prior), and clamped. Market prices bend to it: if RBs are
+    // going 1.3x and WRs 0.9x, that's the room you're bidding in.
+    const sold = { all: { paid: 0, aav: 0, n: 0 } };
+    POSITIONS.forEach((p) => { sold[p] = { paid: 0, aav: 0, n: 0 }; });
+    teams.forEach((t) => (t.players || []).forEach((p) => {
+      if (p.keeper || !(p.aav > 0) || !sold[p.pos]) return;
+      sold[p.pos].paid += +p.cost || 0; sold[p.pos].aav += p.aav; sold[p.pos].n++;
+      sold.all.paid += +p.cost || 0; sold.all.aav += p.aav; sold.all.n++;
+    }));
+    const rAll = sold.all.aav ? sold.all.paid / sold.all.aav : 1;
+    const PRIOR = 6;
+    const tilt = {};
+    POSITIONS.forEach((p) => {
+      const s = sold[p];
+      const rel = s.aav && rAll ? (s.paid / s.aav) / rAll : 1;
+      tilt[p] = { x: Math.min(1.4, Math.max(0.7, (s.n * rel + PRIOR) / (s.n + PRIOR))), n: s.n, raw: rel };
+    });
     avail.forEach((p) => {
       p.model = Math.max(1, Math.round(p.model));
-      p.mkt = Math.max(1, Math.round(Math.max(1, p.aav) * inflation));
+      p.mkt = Math.max(1, Math.round(Math.max(1, p.aav) * inflation * (tilt[p.pos] ? tilt[p.pos].x : 1)));
     });
     // K and D/ST: 85% and 77% of this league's kickers and defenses have gone
     // for $1, seven of ~150 ever reached $3. The best one available is a $2
@@ -164,6 +184,36 @@ window.GuideModel = (function () {
       p.bidders = ts.filter(({ t, st }) =>
         st.open > 0 && st.maxBid >= p.mkt && E.canRoster(t, p.pos).ok).length;
     });
+
+    // ---- who's hunting whom ----
+    // Each rival's likely targets: for every open starter slot, the three
+    // best players they can legally roster at a price inside their max bid.
+    // A player on several of those lists will be fought over; one on none
+    // has a clear path.
+    avail.forEach((p) => { p.contestBy = []; });
+    ts.forEach(({ t, st }) => {
+      if (t.name === myName || st.open <= 0) return;
+      E.SLOTS.filter((sl) => sl.takes && !st.slots[sl.id]).forEach((sl) => {
+        avail.filter((p) => sl.takes.includes(p.pos) && p.mkt <= st.maxBid && E.canRoster(t, p.pos).ok)
+          .sort((a, b) => b.vor - a.vor).slice(0, 3)
+          .forEach((p) => { if (!p.contestBy.includes(t.name)) p.contestBy.push(t.name); });
+      });
+    });
+    avail.forEach((p) => { p.contest = p.contestBy.length; });
+
+    // ---- who's nominating (if the board has an order) ----
+    const order = (state && state.nomOrder) || [];
+    let nominator = null, untilMe = null;
+    if (order.length && teams.length) {
+      const n = order.length, picksN = ((state && state.picks) || []).length;
+      const idx = (((picksN + ((state && state.nomOffset) || 0)) % n) + n) % n;
+      const team = teams.find((t) => t.ti === order[idx]) || teams[order[idx]];
+      nominator = team ? team.name : null;
+      const mineT = teams.find((t) => t.name === myName);
+      const myTi = mineT ? (mineT.ti != null ? mineT.ti : teams.indexOf(mineT)) : -1;
+      const at = order.indexOf(myTi);
+      if (at >= 0) untilMe = (((at - idx) % n) + n) % n;
+    }
 
     // ---- tiers and cliffs within each position ----
     POSITIONS.forEach((pos) => {
@@ -319,7 +369,32 @@ window.GuideModel = (function () {
         return { slot: sl.label, id: sl.id,
                  cands: picks.map((p) => ({ ...p, youEdge: youEdge(p), stretch: !reach(p), byeClash: (clash(p) || {}).name || null })) };
       });
-      me = { name: t.name, remaining: st.remaining, maxBid: st.maxBid, open: st.open,
+      // ---- nominate now: your targets with the clearest path ----
+      // A target is best nominated when the fewest rivals are hunting him
+      // (their open slots and money say so): fewest hunters first, then the
+      // fewest who can pay at all, then the most edge for you. Only players
+      // you'd actually pay the room's price for.
+      const seen = new Set();
+      const nominateNow = targets.flatMap((tg) => tg.cands)
+        .filter((c) => !c.stretch && c.payTo >= c.mkt && c.pos !== 'K' && c.pos !== 'D/ST' && !seen.has(c.name) && seen.add(c.name))
+        .map((c) => avail.find((x) => x.name === c.name) || c)
+        .sort((a, b) => (a.contest - b.contest) || (a.bidders - b.bidders) || ((b.payTo - b.mkt) - (a.payTo - a.mkt)))
+        .slice(0, 6);
+      // ---- $1 fliers: bench upside once the money's gone ----
+      const myRbs = (t.players || []).filter((p) => p.pos === 'RB' && p.nfl);
+      const fliers = avail.filter((p) => p.mkt <= 2 && p.payTo >= 1 && p.pos !== 'K' && p.pos !== 'D/ST' && E.canRoster(t, p.pos).ok)
+        .map((p) => {
+          const cuffFor = p.pos === 'RB' ? myRbs.find((r) => r.nfl === p.nfl && norm(r.name) !== norm(p.name)) : null;
+          const tags = [];
+          if (cuffFor) tags.push(`handcuff · ${cuffFor.name}`);
+          if (p.rookie) tags.push('rookie'); else if (p.soph) tags.push('2nd year');
+          if (p.spread > 8) tags.push('rankers split');
+          // a bench QB is worth little in a one-QB room that pays $1 for starters
+          const upside = (p.proj * 0.2 + (cuffFor ? 30 : 0) + (p.rookie ? 20 : 0) + (p.soph ? 8 : 0) + (p.spread > 8 ? 5 : 0)) * (p.pos === 'QB' ? 0.5 : 1);
+          return { ...p, cuff: !!cuffFor, tags, upside };
+        })
+        .sort((a, b) => b.upside - a.upside).slice(0, 8);
+      me = { name: t.name, remaining: st.remaining, maxBid: st.maxBid, open: st.open, nominateNow, fliers,
              tax: st.tax, needs: openSlots.map((sl) => sl.label), targets,
              avgPerOpen: st.avgPerOpen, benchOpen: benchOpenN, plan, richness, leagueAvg };
     }
@@ -327,7 +402,7 @@ window.GuideModel = (function () {
     const recent = ((state && state.picks) || []).slice(-10).reverse();
     return {
       avail, byPos, repl, scarcity, me, recent, target, auctionSpentAt,
-      league: { moneyLeft, openSpots, spendable, inflation, teams: ts.length,
+      league: { moneyLeft, openSpots, spendable, inflation, tilt, nominator, untilMe, teams: ts.length,
                 picks: ((state && state.picks) || []).length },
       teams: ts.map(({ t, st }) => ({ name: t.name, remaining: st.remaining, maxBid: st.maxBid, open: st.open,
         needs: E.SLOTS.filter((sl) => sl.takes && !st.slots[sl.id]).map((sl) => sl.label) })),
