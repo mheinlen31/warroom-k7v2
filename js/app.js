@@ -6,7 +6,7 @@
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const POOL = (window.GUIDE_PLAYERS || {}).players || [];
   const M = window.GuideModel;
-  const TABS = ['ALL', 'QB', 'RB', 'WR', 'TE', 'K', 'D/ST', 'DRAFTED'];
+  const TABS = ['ALL', 'QB', 'RB', 'WR', 'TE', 'K', 'D/ST', 'WATCH', 'DRAFTED'];
   const posClass = (p) => 'pos-' + String(p).replace('/', '');
 
   let me = localStorage.getItem('sfg-me') || 'Silent Pugios';
@@ -16,13 +16,17 @@
   let dmode = localStorage.getItem('sfg-dmode') || 'order';   // drafted view: order | pos | team
   let sortMode = localStorage.getItem('sfg-sort') === 'edge' ? 'edge' : 'model';   // ALL tab
   let clock = null;                                            // who's on the clock, from the board
+  let watch = new Set();                                       // your watch list (this device)
+  try { watch = new Set(JSON.parse(localStorage.getItem('sfg-watch') || '[]')); } catch (e) {}
+  const saveWatch = () => { try { localStorage.setItem('sfg-watch', JSON.stringify([...watch])); } catch (e) {} };
   const E = window.DraftEngine;
   let state = null;
   let R = null;   // last model result
 
   // ---- tabs ----
+  const tabLabel = (t) => t === 'WATCH' ? `★ Watch${watch.size ? ` <b>${watch.size}</b>` : ''}` : t;
   $('tabs').innerHTML = TABS.map((t) =>
-    `<button class="tab${t === tab ? ' on' : ''}" data-t="${t}">${t}</button>`).join('');
+    `<button class="tab${t === tab ? ' on' : ''}" data-t="${t}">${tabLabel(t)}</button>`).join('');
   $('tabs').addEventListener('click', (e) => {
     const b = e.target.closest('.tab'); if (!b) return;
     tab = b.dataset.t; localStorage.setItem('sfg-tab', tab);
@@ -36,6 +40,12 @@
     renderBoard();
   });
   $('board').addEventListener('click', (e) => {
+    const st = e.target.closest('.star');
+    if (st) {
+      const n = st.dataset.w;
+      watch.has(n) ? watch.delete(n) : watch.add(n);
+      saveWatch(); renderBoard(); renderClock(); return;
+    }
     const b = e.target.closest('.dm'); if (!b) return;
     dmode = b.dataset.m; try { localStorage.setItem('sfg-dmode', dmode); } catch (err) { /* private mode */ }
     renderBoard();
@@ -115,18 +125,36 @@
 
     // ---- plan ----
     const BENCH_EACH = 2;
-    // one player can only fill one slot: dedicated slots claim first, FLEX
-    // takes what's left, and each slot budgets its second-best remaining value
-    const claimed = new Set();
+    // A plan has to fit the money. Start each open starter slot at its
+    // second-best remaining value (you won't land everyone's first choice),
+    // one player per slot -- dedicated slots claim first, FLEX takes what's
+    // left -- then, while the total is over budget, step the priciest slot
+    // down to its next-cheaper candidate until it fits. Bench is $2 a spot.
+    const budget = me_.remaining - me_.benchOpen * BENCH_EACH;
     const order = me_.targets.slice().sort((a, b) => (a.id === 'FLEX') - (b.id === 'FLEX'));
-    const planned = {};
-    order.forEach((t) => {
-      const free = t.cands.filter((c) => !claimed.has(c.name));
-      const pick = free[1] || free[0] || null;
-      if (pick) claimed.add(pick.name);
-      planned[t.id] = { slot: t.slot, target: pick ? pick.model : 1, who: pick ? pick.name : '—' };
+    const candsFor = (t) => {
+      const takes = (E.SLOTS.find((x) => x.id === t.id) || {}).takes || [];
+      return R.avail.filter((p) => takes.includes(p.pos) && p.vor > 0 && (!meT || E.canRoster(meT, p.pos).ok))
+        .sort((a, b) => b.model - a.model || b.proj - a.proj);
+    };
+    const plan_ = order.map((t) => ({ id: t.id, slot: t.slot, list: candsFor(t), idx: 1, pick: null }));
+    const settle = () => plan_.forEach((r) => {
+      const others = new Set(plan_.filter((o) => o !== r).map((o) => o.pick && o.pick.name).filter(Boolean));
+      const free = r.list.filter((c) => !others.has(c.name));
+      r.pick = free[Math.min(r.idx, free.length - 1)] || null;
     });
-    const rows = me_.targets.map((t) => planned[t.id]);
+    settle();
+    const total_ = () => plan_.reduce((s, r) => s + (r.pick ? r.pick.model : 1), 0);
+    let guard = 0;
+    while (total_() > budget && guard++ < 80) {
+      const cand = plan_.filter((r) => r.pick && r.idx + 1 < r.list.length)
+        .sort((a, b) => b.pick.model - a.pick.model)[0];
+      if (!cand) break;
+      cand.idx += 1; settle();
+    }
+    const fits = total_() <= budget;
+    const rows = me_.targets.map((t) => { const r = plan_.find((x) => x.id === t.id);
+      return { slot: r.slot, target: r.pick ? r.pick.model : 1, who: r.pick ? r.pick.name : '—' }; });
     const starters = rows.reduce((s, r) => s + r.target, 0);
     const bench = me_.benchOpen * BENCH_EACH;
     const total = starters + bench;
@@ -138,7 +166,7 @@
         <tr class="tot"><td></td><td>planned</td><td class="pt">$${total}</td></tr>
         <tr class="tot ${diff >= 0 ? 'ok' : 'bad'}"><td></td><td>${diff >= 0 ? 'cushion' : 'over by'}</td><td class="pt">$${Math.abs(diff)}</td></tr>
       </table>
-      <div class="fact">${diff >= 0 ? `Room to go $${diff} over on one target and still fill out.` : `Trim $${-diff}: drop a slot a tier, or take the bargains the room leaves.`}</div>
+      <div class="fact">${fits ? `Fits with $${diff} to spare — that's your room to chase one target.` : `Even the cheapest sensible plan is $${-diff} over: you'll be leaning on $1 bench fliers.`}</div>
     </div>`;
 
     // ---- drain ----
@@ -266,13 +294,24 @@
   function renderBoard() {
     if (tab === 'DRAFTED') { $('sort-btn').hidden = true; if (!state) { $('board').innerHTML = '<div class="empty">waiting for the board…</div>'; return; } renderDrafted(); return; }
     if (!R) { $('board').innerHTML = '<div class="empty">waiting for the board…</div>'; return; }
-    let rows;
+    let rows = [];
     if (tab === 'ALL') {
       rows = R.avail.filter((p) => p.proj > 0 || p.aav > 0)
         .sort(sortMode === 'edge' ? ((a, b) => b.edge - a.edge || b.model - a.model)
                                   : ((a, b) => b.model - a.model || b.proj - a.proj)).slice(0, 160);
-    } else {
+    } else if (R.byPos[tab]) {                       // a position tab; WATCH is handled below
       rows = R.byPos[tab].filter((p) => p.proj > 0 || p.aav > 0);
+    }
+    let soldHtml = '';
+    if (tab === 'WATCH') {
+      rows = R.avail.filter((p) => watch.has(p.name)).sort((a, b) => b.model - a.model);
+      const sold = ((state && state.picks) || []).filter((p) => watch.has(p.name));
+      $('count').textContent = `${rows.length} watching${sold.length ? ` · ${sold.length} sold` : ''}`;
+      $('sort-btn').hidden = true;
+      soldHtml = sold.length ? `<table class="soldlist"><tbody>${sold.map((p) => `<tr class="sold"><td class="w">★</td><td class="rk">${p.n}</td>
+        <td class="pl"><div class="nm">${esc(p.name)}</div><div class="meta"><span class="pos ${posClass(p.pos)}">${esc(p.pos)}</span></div></td>
+        <td class="team-cell">sold to ${esc(p.team)}</td><td class="model">$${p.cost}</td></tr>`).join('')}</tbody></table>` : '';
+      if (!rows.length) { $('board').innerHTML = soldHtml || '<div class="empty">Tap ★ on any player to watch him here.</div>'; return; }
     }
     if (q) rows = R.avail.filter((p) => p.name.toLowerCase().includes(q)).sort((a, b) => b.model - a.model);
     $('count').textContent = `${rows.length} available`;
@@ -285,10 +324,11 @@
       let head = '';
       if (byPosView && p.tier !== lastTier) {
         lastTier = p.tier;
-        head = `<tr class="tier-head"><td colspan="8">Tier ${p.tier}</td></tr>`;
+        head = `<tr class="tier-head"><td colspan="9">Tier ${p.tier}</td></tr>`;
       }
       const cons = p.cons ? `cons ${p.cons}${p.spread > 8 ? ` <span title="rankers disagree">±${p.spread}</span>` : ''}` : '';
-      return head + `<tr class="${p.cliff && byPosView ? 'cliff' : ''}" data-n="${esc(p.name)}">
+      return head + `<tr class="${p.cliff && byPosView ? 'cliff' : ''}${watch.has(p.name) ? ' watched' : ''}" data-n="${esc(p.name)}">
+        <td class="w"><button type="button" class="star${watch.has(p.name) ? ' on' : ''}" data-w="${esc(p.name)}" title="Watch list">★</button></td>
         <td class="rk">${byPosView ? p.posRank : i + 1}</td>
         <td class="pl"><div class="nm">${esc(p.name)}</div>
           <div class="meta"><span class="pos ${posClass(p.pos)}">${esc(p.pos)}${byPosView ? '' : p.posRank}</span>
@@ -301,9 +341,10 @@
       </tr>`;
     }).join('');
     $('board').innerHTML = (byPosView ? ladderHint(tab) : '') + `<table>
-      <thead><tr><th class="l">#</th><th class="l">Player</th><th class="wide">Proj</th>
+      <thead><tr><th></th><th class="l">#</th><th class="l">Player</th><th class="wide">Proj</th>
         <th>Model</th><th>Mkt</th><th>Edge</th><th class="wide">Bidders</th></tr></thead>
-      <tbody>${body}</tbody></table>`;
+      <tbody>${body}</tbody></table>` + soldHtml;
+    const wt = document.querySelector('.tab[data-t="WATCH"]'); if (wt) wt.innerHTML = tabLabel('WATCH');
   }
 
   function renderRecent() {
@@ -352,7 +393,7 @@
     box.innerHTML = `<div class="oc-card ${cls}">
       <div class="oc-top">
         <div>
-          <div class="oc-eyebrow"><span class="dot"></span>On the clock</div>
+          <div class="oc-eyebrow"><span class="dot"></span>On the clock${watch.has(p.name) ? ' <i class="wflag">★ on your watch list</i>' : ''}</div>
           <div class="oc-name">${esc(p.name)}</div>
           <div class="oc-sub"><span class="pos ${posClass(p.pos)}">${esc(p.pos)}${p.posRank}</span>${p.nfl ? ' · ' + esc(p.nfl) : ''} · proj ${p.proj.toFixed(0)} · tier ${p.tier}${p.cliff ? ' · cliff after him' : ''}${injHtml(p) ? ' · ' + injHtml(p) : ''}</div>
         </div>

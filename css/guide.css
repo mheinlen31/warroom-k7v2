@@ -187,3 +187,13 @@ table.plan tr.tot.ok .pt { color:var(--green); } table.plan tr.tot.bad .pt { col
 .rs.open .rn { color:var(--dim); font-weight:500; }
 .rs .rc { font-family:var(--display); font-weight:800; color:var(--gold); }
 .fact.run { margin-top:6px; color:#ffb35c; } .fact.run b { color:#ffb35c; }
+
+/* ---------------- watch list ---------------- */
+td.w { width:1%; padding-left:6px; padding-right:0; }
+.star { background:transparent; border:none; color:var(--dim); font-size:18px; line-height:1; cursor:pointer; padding:4px 6px; }
+.star.on { color:var(--gold); text-shadow:0 0 10px rgba(255,201,74,.5); }
+tr.watched td { background:rgba(255,201,74,.05); }
+.tab b { color:var(--gold); margin-left:3px; }
+.wflag { font-style:normal; color:var(--gold); margin-left:8px; letter-spacing:.1em; }
+table.soldlist { margin-top:8px; opacity:.7; }
+table.soldlist .nm { text-decoration:line-through; color:var(--soft); }
