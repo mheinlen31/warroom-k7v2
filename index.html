@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>War Room</title>
+<meta name="theme-color" content="#070b14">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="War Room">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@600;700;800&family=Saira:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="css/guide.css?v=202609042036">
+</head>
+<body>
+<header class="top">
+  <div class="brand"><b>War Room</b><span id="live-pill" class="pill">connecting…</span></div>
+  <label class="me-pick">You are <select id="me-select"></select></label>
+</header>
+
+<section class="cockpit" id="cockpit"></section>
+
+<section class="targets" id="targets"></section>
+
+<nav class="tabs" id="tabs"></nav>
+<div class="tools">
+  <input id="q" type="search" placeholder="Find a player…" autocomplete="off">
+  <span class="count" id="count"></span>
+</div>
+
+<main id="board"></main>
+
+<section class="recent" id="recent"></section>
+
+<footer class="how">
+  <h3>How the numbers work</h3>
+  <p><b>Model $</b> is value over replacement. For each position the model counts
+  every unfilled starting slot in the league (plus a share of FLEX and bench
+  demand), finds the player you'd get for nothing at that depth — the
+  <em>replacement level</em> — and values everyone by projected points above him.
+  The room's spendable money is then shared out in proportion. Scarcity is
+  built in: when the elite backs go and eight rosters still have an empty RB1,
+  the replacement level falls and every remaining RB is worth more.</p>
+  <p><b>Mkt $</b> is ESPN's auction value scaled by live inflation — the money
+  still in the room against the ADP value of the players who'll actually get
+  drafted. It's what the table will pay if it bids on instinct.</p>
+  <p><b>Edge</b> is Model minus Mkt: green means the room is likely to underpay
+  him, red that he'll go for more than he's worth to a lineup. <b>Bidders</b>
+  is how many teams can legally roster him <em>and</em> have the max bid to
+  pay his market price — two or fewer and he may go cheap.</p>
+  <p>Tiers break on projection gaps within a position; a <b>cliff</b> marks the
+  last player before a big drop. Projections, values and consensus rank are
+  ESPN's; consensus is the mean of their individual rankers and
+  <em>spread</em> is how far those rankers disagree.</p>
+</footer>
+
+<script src="js/players.js?v=202609042036"></script>
+<script src="js/engine.js?v=202609042036"></script>
+<script src="js/live.js?v=202609042036"></script>
+<script src="js/model.js?v=202609042036"></script>
+<script src="js/app.js?v=202609042036"></script>
+</body>
+</html>
