@@ -6,13 +6,14 @@
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const POOL = (window.GUIDE_PLAYERS || {}).players || [];
   const M = window.GuideModel;
-  const TABS = ['ALL', 'QB', 'RB', 'WR', 'TE', 'K', 'D/ST'];
+  const TABS = ['ALL', 'QB', 'RB', 'WR', 'TE', 'K', 'D/ST', 'DRAFTED'];
   const posClass = (p) => 'pos-' + String(p).replace('/', '');
 
   let me = localStorage.getItem('sfg-me') || 'Silent Pugios';
   let tab = localStorage.getItem('sfg-tab') || 'ALL';
   if (!TABS.includes(tab)) tab = 'ALL';
   let q = '';
+  let dmode = localStorage.getItem('sfg-dmode') || 'order';   // drafted view: order | pos | team
   let state = null;
   let R = null;   // last model result
 
@@ -26,6 +27,11 @@
     renderBoard();
   });
   $('q').addEventListener('input', () => { q = $('q').value.trim().toLowerCase(); renderBoard(); });
+  $('board').addEventListener('click', (e) => {
+    const b = e.target.closest('.dm'); if (!b) return;
+    dmode = b.dataset.m; try { localStorage.setItem('sfg-dmode', dmode); } catch (err) { /* private mode */ }
+    renderBoard();
+  });
   $('me-select').addEventListener('change', () => {
     me = $('me-select').value; localStorage.setItem('sfg-me', me); render();
   });
@@ -132,7 +138,53 @@
       .map((n) => ` #${n} ≈ <b>$${l[n]}</b>`).join(' ·')}</div>`;
   }
 
+  /* Everyone who's been sold tonight -- in draft order, or grouped by position
+     or by team, each group tallied. Price sits next to ESPN's auction value
+     for the same player so overpays and steals read at a glance. */
+  function renderDrafted() {
+    const picks = ((state && state.picks) || []).slice().sort((a, b) => a.n - b.n)
+      .filter((p) => !q || p.name.toLowerCase().includes(q));
+    const total = picks.reduce((s, p) => s + (+p.cost || 0), 0);
+    $('count').textContent = `${picks.length} drafted · $${total}`;
+    const modes = `<div class="dmodes">${[['order', 'Draft order'], ['pos', 'By position'], ['team', 'By team']]
+      .map(([m, l]) => `<button type="button" class="dm${dmode === m ? ' on' : ''}" data-m="${m}">${l}</button>`).join('')}</div>`;
+    if (!picks.length) { $('board').innerHTML = modes + '<div class="empty">Nobody drafted yet.</div>'; return; }
+
+    const row = (p) => {
+      const aav = p.aav ? Math.round(p.aav) : null;
+      const d = aav != null ? p.cost - aav : null;
+      const dh = d == null ? '' : d > 0 ? `<span class="neg-edge">+$${d}</span>` : d < 0 ? `<span class="pos-edge">−$${Math.abs(d)}</span>` : '<span class="zero-edge">—</span>';
+      return `<tr>
+        <td class="rk">${p.n}</td>
+        <td class="pl"><div class="nm">${esc(p.name)}</div>
+          <div class="meta"><span class="pos ${posClass(p.pos)}">${esc(p.pos)}</span>${p.nfl ? `<span>${esc(p.nfl)}</span>` : ''}</div></td>
+        <td class="team-cell wide">${esc(p.team)}</td>
+        <td class="model">$${p.cost}</td>
+        <td class="mkt">${aav != null ? '$' + aav : '—'}</td>
+        <td class="edge">${dh}</td>
+      </tr>`;
+    };
+    const head = (label, list) => {
+      const t = list.reduce((s, p) => s + p.cost, 0);
+      return `<tr class="tier-head"><td colspan="6">${esc(label)} · ${list.length} · $${t} · avg $${Math.round(t / list.length)}</td></tr>`;
+    };
+    let body = '';
+    if (dmode === 'pos') {
+      M.POSITIONS.forEach((pos) => { const l = picks.filter((p) => p.pos === pos); if (l.length) body += head(pos, l) + l.map(row).join(''); });
+    } else if (dmode === 'team') {
+      const order = (state.teams || []).map((t) => t.name);
+      order.forEach((tm) => { const l = picks.filter((p) => p.team === tm); if (l.length) body += head(tm, l) + l.map(row).join(''); });
+    } else {
+      body = picks.map(row).join('');
+    }
+    $('board').innerHTML = modes + `<table>
+      <thead><tr><th class="l">#</th><th class="l">Player</th><th class="l wide">Team</th>
+        <th>Paid</th><th>ESPN</th><th>vs</th></tr></thead>
+      <tbody>${body}</tbody></table>`;
+  }
+
   function renderBoard() {
+    if (tab === 'DRAFTED') { if (!state) { $('board').innerHTML = '<div class="empty">waiting for the board…</div>'; return; } renderDrafted(); return; }
     if (!R) { $('board').innerHTML = '<div class="empty">waiting for the board…</div>'; return; }
     let rows;
     if (tab === 'ALL') {
