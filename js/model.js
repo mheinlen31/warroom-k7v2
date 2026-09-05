@@ -138,7 +138,8 @@ window.GuideModel = (function () {
     // inflation: the room's money against the ADP value of the players who'll actually be drafted
     const willDraft = avail.slice().sort((a, b) => a.rank - b.rank).slice(0, openSpots);
     const mktValue = willDraft.reduce((s, p) => s + Math.max(1, p.aav), 0) || 1;
-    const inflation = openSpots ? moneyLeft / mktValue : 1;
+    // clamped: with a handful of $1 spots left the ratio is noise
+    const inflation = openSpots ? Math.min(1.8, Math.max(0.6, moneyLeft / mktValue)) : 1;
 
     avail.forEach((p) => {
       p.model = Math.max(1, Math.round(p.model));
@@ -156,6 +157,8 @@ window.GuideModel = (function () {
       });
     });
     avail.forEach((p) => {
+      p.model = Math.min(p.model, roomMax);        // the K/D-ST override above can't exceed it either
+      p.mkt = Math.min(p.mkt, roomMax);
       p.edge = p.model - p.mkt;
       // who can actually pay the market price AND legally roster him
       p.bidders = ts.filter(({ t, st }) =>
@@ -220,9 +223,115 @@ window.GuideModel = (function () {
         return { slot: sl.label, id: sl.id,
                  cands: picks.map((p) => ({ ...p, stretch: p.model > st.maxBid, byeClash: (clash(p) || {}).name || null })) };
       });
+      // ---- your number: what each player is worth to THIS roster ----
+      // Model $ says what a player is worth to a lineup in general. Your
+      // number adjusts it for your seat: a premium when he fills an open
+      // starter slot and the drop to the next name you could afford is steep
+      // (more if the position is thin or he's the last of his tier), scaled
+      // by how flush you are against the room -- a seat poorer than the room
+      // never chases; a bench piece is capped at a bench price; and nothing
+      // exceeds your max bid. This is the number the clock panel argues from.
+      const leagueAvg = openSpots ? moneyLeft / openSpots : 0;
+      const richness = leagueAvg ? Math.min(1.5, Math.max(0.5, st.avgPerOpen / leagueAvg)) : 1;
+      const starterOpen = openSlots.filter((sl) => sl.takes);
+      const benchOpenN = openSlots.length - starterOpen.length;
+      // ---- the plan: a lineup that fits the money ----
+      // Start each open starter slot at its second-best remaining value (you
+      // won't land everyone's first choice), one player per slot -- dedicated
+      // slots claim first, FLEX takes what's left -- then, while the total is
+      // over budget, step the priciest slot down to its next-cheaper candidate
+      // until it fits. Bench is $2 a spot. The cushion left over is the only
+      // money "your number" may spend above lineup value.
+      const BENCH_EACH = 2;
+      const planBudget = st.remaining - benchOpenN * BENCH_EACH;
+      const planRows = starterOpen.slice().sort((a, b) => (a.id === 'FLEX') - (b.id === 'FLEX')).map((sl) => ({
+        id: sl.id, slot: sl.label, idx: 1, pick: null,
+        list: avail.filter((p) => sl.takes.includes(p.pos) && p.vor > 0 && E.canRoster(t, p.pos).ok)
+          .sort((a, b) => b.model - a.model || b.proj - a.proj) }));
+      const settle = () => planRows.forEach((r) => {
+        const others = new Set(planRows.filter((o) => o !== r).map((o) => o.pick && o.pick.name).filter(Boolean));
+        const free = r.list.filter((c) => !others.has(c.name));
+        r.pick = free[Math.min(r.idx, free.length - 1)] || null;
+      });
+      settle();
+      const planTotal = () => planRows.reduce((s, r) => s + (r.pick ? r.pick.model : 1), 0);
+      let guard = 0;
+      while (planTotal() > planBudget && guard++ < 80) {
+        const cand = planRows.filter((r) => r.pick && r.idx + 1 < r.list.length).sort((a, b) => b.pick.model - a.pick.model)[0];
+        if (!cand) break;
+        cand.idx += 1; settle();
+      }
+      const planStarters = planTotal(), planBench = benchOpenN * BENCH_EACH;
+      const plan = {
+        rows: starterOpen.map((sl) => { const r = planRows.find((x) => x.id === sl.id);
+          return { id: sl.id, slot: sl.label, target: r.pick ? r.pick.model : 1, who: r.pick ? r.pick.name : '—' }; }),
+        bench: planBench, benchEach: BENCH_EACH, benchOpen: benchOpenN,
+        total: planStarters + planBench, cushion: st.remaining - planStarters - planBench, fits: planStarters <= planBudget,
+      };
+      const cushion = Math.max(0, plan.cushion);
+      const benchCap = Math.max(1, BENCH_EACH + Math.floor(cushion / Math.max(1, st.open)));
+      // Your number. The path you'd take instead of buying him is the plan's
+      // pick for that slot (or the next name down if he IS the plan). If he's
+      // the upgrade, you should pay that player's price plus the step up --
+      // and the step up is worth more to a seat with more money per open spot
+      // than the room (a dollar is cheap for you) and less to a poorer seat,
+      // which never pays above lineup value. If he's the cheaper option, he's
+      // worth his lineup value and no more: someone as good is on the board at
+      // that price. Small bumps for a thin position or the last man in a tier,
+      // a small haircut for sharing a bye with a starter you already have at
+      // the position; capped by your max bid, by what leaves the rest of your
+      // starters fillable, and at $3 for K and D/ST.
+      const minRest = (row) => planRows.filter((r) => r !== row)
+        .reduce((s, r) => s + (r.list.length ? Math.max(1, r.list[r.list.length - 1].model) : 1), 0);
+      const perSpot = `($${Math.round(st.avgPerOpen)} vs $${Math.round(leagueAvg)} a spot)`;
+      const seatNote = richness < 0.85 ? `seat is poorer than the room ${perSpot}`
+        : richness < 0.97 ? `seat is a bit poorer than the room ${perSpot}`
+        : richness > 1.03 ? `seat is flush ${perSpot}` : '';
+      avail.forEach((p) => {
+        const can = E.canRoster(t, p.pos);
+        if (!can.ok) { p.payTo = 0; p.why = can.why || 'no room on your roster'; return; }
+        const fits = starterOpen.filter((sl) => sl.takes.includes(p.pos));
+        if (!fits.length) {
+          p.payTo = Math.max(0, Math.min(p.model, benchCap, st.maxBid));
+          p.why = `bench piece for you · bench money is ~$${benchCap} a spot`; return;
+        }
+        const sl = fits.find((x) => x.id !== 'FLEX') || fits[0];   // dedicated slot first, FLEX only if that's all that's open
+        const pr = planRows.find((r) => r.id === sl.id);
+        const others = new Set(planRows.filter((o) => o !== pr).map((o) => o.pick && o.pick.name).filter(Boolean));
+        let alt = pr && pr.pick && pr.pick !== p ? pr.pick : null;
+        if (!alt && pr) {
+          const free = pr.list.filter((c) => c !== p && !others.has(c.name) && c.model <= st.maxBid);
+          alt = free.find((c) => c.model <= p.model) || free[0] || null;
+        }
+        const bits = [`fills your ${sl.label}`];
+        const upgrade = !alt || p.model >= alt.model;
+        const gap = alt ? Math.round(p.vor - alt.vor) : 0;
+        let num;
+        if (upgrade) {
+          num = alt ? alt.model + (p.model - alt.model) * richness : p.model;
+          if (alt) bits.push(`upgrade on ${alt.name} ($${alt.model} in your plan, ${gap} pts back)`);
+          const thin = scarcity[p.pos].label === 'thin';
+          if (thin) { num += 0.05 * p.model * richness; bits.push(`${p.pos} is thin`); }
+          if (p.cliff) { num += 0.05 * p.model * richness; bits.push('last of his tier'); }
+          if (richness < 0.85) num = Math.min(num, p.model);
+          if (seatNote) bits.push(seatNote + (richness < 0.85 ? ' — step-up discounted, never above lineup value' : richness < 1 ? ' — step-up discounted' : ' — the step-up is worth more to you'));
+        } else {
+          num = p.model;
+          bits.push(`cheaper than your plan's ${alt.name} ($${alt.model}), ${Math.abs(gap)} pts worse — lineup value, no more`);
+        }
+        const cl = clash(p);
+        if (cl) { num *= 0.96; bits.push(`shares bye ${p.bye} with ${cl.name}`); }
+        const feasible = pr ? st.remaining - plan.bench - minRest(pr) : st.maxBid;
+        let payTo = Math.round(Math.min(st.maxBid, feasible, num));
+        if (p.pos === 'K' || p.pos === 'D/ST') payTo = Math.min(payTo, 3);
+        p.payTo = Math.max(st.maxBid >= 1 ? 1 : 0, payTo);
+        if (p.payTo === st.maxBid && num > st.maxBid) bits.push('capped by your max bid');
+        else if (pr && feasible < num && p.payTo === Math.round(feasible)) bits.push(`leaves $${minRest(pr)} to finish your other starters`);
+        p.why = bits.join(' · ');
+      });
       me = { name: t.name, remaining: st.remaining, maxBid: st.maxBid, open: st.open,
              tax: st.tax, needs: openSlots.map((sl) => sl.label), targets,
-             avgPerOpen: st.avgPerOpen, benchOpen: openSlots.filter((sl) => !sl.takes).length };
+             avgPerOpen: st.avgPerOpen, benchOpen: benchOpenN, plan, richness, leagueAvg };
     }
 
     const recent = ((state && state.picks) || []).slice(-10).reverse();

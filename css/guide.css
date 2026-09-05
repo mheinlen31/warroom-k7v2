@@ -227,3 +227,8 @@ table.rb tr.me td { background:rgba(255,201,74,.07); }
 .tc .nm i.clash { display:block; font-style:normal; font-family:var(--data); font-size:9.5px; letter-spacing:.06em; text-transform:uppercase; color:#ffb35c; font-weight:700; }
 .tc .nm i.clash.st { color:var(--faint); }
 .tc.stretch .nm, .tc.stretch .pr { opacity:.6; }
+
+td.you { font-family:var(--display); font-weight:800; font-size:15px; color:var(--soft); white-space:nowrap; }
+td.you.up { color:var(--green); } td.you.down { color:var(--faint); }
+.oc-why { font-size:11.5px; color:var(--soft); margin-top:6px; line-height:1.4; }
+.oc-foot i.yu { font-style:normal; color:var(--green); font-weight:700; }

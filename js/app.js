@@ -141,42 +141,9 @@
     const meT = (state.teams || []).find((t) => t.name === me);
     const st = meT ? E.teamState(meT) : null;
 
-    // ---- plan ----
-    const BENCH_EACH = 2;
-    // A plan has to fit the money. Start each open starter slot at its
-    // second-best remaining value (you won't land everyone's first choice),
-    // one player per slot -- dedicated slots claim first, FLEX takes what's
-    // left -- then, while the total is over budget, step the priciest slot
-    // down to its next-cheaper candidate until it fits. Bench is $2 a spot.
-    const budget = me_.remaining - me_.benchOpen * BENCH_EACH;
-    const order = me_.targets.slice().sort((a, b) => (a.id === 'FLEX') - (b.id === 'FLEX'));
-    const candsFor = (t) => {
-      const takes = (E.SLOTS.find((x) => x.id === t.id) || {}).takes || [];
-      return R.avail.filter((p) => takes.includes(p.pos) && p.vor > 0 && (!meT || E.canRoster(meT, p.pos).ok))
-        .sort((a, b) => b.model - a.model || b.proj - a.proj);
-    };
-    const plan_ = order.map((t) => ({ id: t.id, slot: t.slot, list: candsFor(t), idx: 1, pick: null }));
-    const settle = () => plan_.forEach((r) => {
-      const others = new Set(plan_.filter((o) => o !== r).map((o) => o.pick && o.pick.name).filter(Boolean));
-      const free = r.list.filter((c) => !others.has(c.name));
-      r.pick = free[Math.min(r.idx, free.length - 1)] || null;
-    });
-    settle();
-    const total_ = () => plan_.reduce((s, r) => s + (r.pick ? r.pick.model : 1), 0);
-    let guard = 0;
-    while (total_() > budget && guard++ < 80) {
-      const cand = plan_.filter((r) => r.pick && r.idx + 1 < r.list.length)
-        .sort((a, b) => b.pick.model - a.pick.model)[0];
-      if (!cand) break;
-      cand.idx += 1; settle();
-    }
-    const fits = total_() <= budget;
-    const rows = me_.targets.map((t) => { const r = plan_.find((x) => x.id === t.id);
-      return { slot: r.slot, target: r.pick ? r.pick.model : 1, who: r.pick ? r.pick.name : '—' }; });
-    const starters = rows.reduce((s, r) => s + r.target, 0);
-    const bench = me_.benchOpen * BENCH_EACH;
-    const total = starters + bench;
-    const diff = me_.remaining - total;
+    // ---- plan (computed in the model, shared with "your number") ----
+    const pl = me_.plan;
+    const BENCH_EACH = pl.benchEach, rows = pl.rows, bench = pl.bench, total = pl.total, diff = pl.cushion, fits = pl.fits;
     const plan = `<div class="card">
       <h4>Your plan · $${me_.remaining} to spend</h4>
       <table class="plan">${rows.map((r) => `<tr><td class="ps ${posClass(r.slot)}">${esc(r.slot)}</td><td class="pw">${esc(r.who)}</td><td class="pt">$${r.target}</td></tr>`).join('')}
@@ -366,12 +333,13 @@
         <td class="model">${money(p.model)}</td>
         <td class="mkt">${money(p.mkt)}</td>
         <td class="edge">${edgeHtml(p.edge)}</td>
+        <td class="you${p.payTo > p.model ? ' up' : p.payTo < p.model ? ' down' : ''}" title="${esc(p.why || '')}">${p.payTo == null ? '' : p.payTo === 0 ? '—' : money(p.payTo)}</td>
         <td class="bid wide${p.bidders <= 2 ? ' few' : ''}">${p.bidders}</td>
       </tr>`;
     }).join('');
     $('board').innerHTML = (byPosView ? ladderHint(tab) : '') + `<table>
       <thead><tr><th></th><th class="l">#</th><th class="l">Player</th><th class="wide">Proj</th>
-        <th>Model</th><th>Mkt</th><th>Edge</th><th class="wide">Bidders</th></tr></thead>
+        <th>Model</th><th>Mkt</th><th>Edge</th><th title="your number: what he's worth to your roster, inside your max">You</th><th class="wide">Bidders</th></tr></thead>
       <tbody>${body}</tbody></table>` + soldHtml;
     const wt = document.querySelector('.tab[data-t="WATCH"]'); if (wt) wt.innerHTML = tabLabel('WATCH');
   }
@@ -421,11 +389,14 @@
       .sort((a, b) => b.st.maxBid - a.st.maxBid);
     const meCan = meT ? E.canRoster(meT, p.pos) : { ok: false, why: '' };
     const myMax = meSt ? meSt.maxBid : 0;
+    const payTo = p.payTo != null ? p.payTo : Math.min(p.model, myMax);
+    const over = payTo - p.model;
     let verdict, cls;
     if (!meCan.ok) { verdict = `You can't roster him — ${esc(meCan.why || 'position full')}`; cls = 'stop'; }
     else if (myMax <= bid) { verdict = `Out of your range — your max is $${myMax}`; cls = 'stop'; }
-    else if (bid < p.model) { verdict = `Worth up to <b>$${Math.min(p.model, myMax)}</b> to you${p.model > myMax ? ' (capped by your max)' : ''}`; cls = 'go'; }
-    else { verdict = `Past his value — let him go above <b>$${p.model}</b>`; cls = 'stop'; }
+    else if (bid < payTo) { verdict = `Pay up to <b>$${payTo}</b>${over > 0 ? ` — $${over} over his $${p.model} lineup value, for your seat` : over < 0 ? ` — under his $${p.model} lineup value, for your seat` : ''}`; cls = 'go'; }
+    else { verdict = `Past your number — <b>$${payTo}</b> for you${p.model > payTo ? ` (worth $${p.model} to a lineup, less to your roster)` : ''}`; cls = 'stop'; }
+    const why = meCan.ok && p.why ? `<div class="oc-why">${esc(p.why)}</div>` : '';
     const alts = R.byPos[p.pos].filter((x) => x !== p && x.vor > 0).slice(0, 3);
     // nine years of their own bidding: who at this table chases this position
     const tiltFor = (teamName) => { const o = (T && T.owners || []).find((x) => x.team === teamName); return o ? (o.tilt[p.pos] || 0) : 0; };
@@ -442,22 +413,23 @@
         <div class="oc-bid"><span>current bid</span><b>${bid ? '$' + bid : '—'}</b></div>
       </div>
       <div class="oc-nums">
-        <div class="stat big"><b>$${p.model}</b><span>worth to a lineup</span></div>
+        <div class="stat big"><b>$${meCan.ok ? payTo : '—'}</b><span>pay up to · you</span></div>
+        <div class="stat"><b>$${p.model}</b><span>worth to a lineup</span></div>
         <div class="stat"><b>$${p.mkt}</b><span>room likely pays</span></div>
         <div class="stat"><b class="${p.edge > 0 ? 'pos-edge' : p.edge < 0 ? 'neg-edge' : ''}">${p.edge > 0 ? '+' : ''}$${p.edge}</b><span>edge</span></div>
         <div class="stat"><b>$${myMax}</b><span>your max</span></div>
         <div class="stat"><b>${raisers.length}</b><span>can still raise</span></div>
       </div>
-      <div class="oc-verdict">${verdict}</div>
+      <div class="oc-verdict">${verdict}</div>${why}
       <div class="oc-foot">
         <span><b>Can raise:</b> ${raisers.length ? raisers.slice(0, 6).map(({ t, st }) => `${esc(t.name)} $${st.maxBid}${tag(t.name)}`).join(' · ') + (raisers.length > 6 ? ` · +${raisers.length - 6}` : '') : 'nobody'}</span>
         <span><b>${esc(p.pos)} left:</b> ${sc.solid} solid · ${sc.label}</span>
-        <span><b>Next best:</b> ${alts.length ? alts.map((x) => `${esc(x.name)} $${x.model}`).join(' · ') : 'nobody worth paying for'}</span>
+        <span><b>Next best:</b> ${alts.length ? alts.map((x) => `${esc(x.name)} $${x.model}${x.payTo != null && x.payTo !== x.model ? ` <i class="yu">you $${x.payTo}</i>` : ''}`).join(' · ') : 'nobody worth paying for'}</span>
       </div>
     </div>`;
     mini.className = 'oc-mini ' + cls;
     mini.innerHTML = `<span class="mn">${esc(p.name)}</span><span class="mb">${bid ? '$' + bid : '—'}</span>
-      <span class="mv">worth <b>$${p.model}</b> · you <b>$${myMax}</b> · ${raisers.length} can raise</span>`;
+      <span class="mv">you up to <b>$${meCan.ok ? payTo : '—'}</b> · worth $${p.model} · max $${myMax} · ${raisers.length} can raise</span>`;
     mini.hidden = !miniWanted;
   }
   // the mini strip shows only while the big panel is scrolled out of view
