@@ -199,38 +199,12 @@ window.GuideModel = (function () {
     if (mine) {
       const { t, st } = mine;
       const openSlots = E.SLOTS.filter((sl) => !st.slots[sl.id]);
-      // "Best value" is judged against THIS roster, not the league: legal for
-      // the slot, inside this team's max bid, ranked by what it would save
-      // against the room's likely price (edge), then by talent. If fewer than
-      // three fit the money, the list is topped up by talent and those are
-      // marked as a stretch. A bye shared with a starter already rostered at
-      // the position is flagged too -- that's a real cost on draft night.
       const rostered = (t.players || []).map((p) => {
         const ref = pool.find((x) => norm(x.name) === norm(p.name));
         return { pos: p.pos, name: p.name, bye: ref ? ref.bye : null };
       });
       const clash = (p) => rostered.find((r) => r.bye && r.bye === p.bye && r.pos === p.pos);
-      const targets = openSlots.filter((sl) => sl.takes).map((sl) => {
-        const talent = avail.filter((p) => sl.takes.includes(p.pos) && E.canRoster(t, p.pos).ok)
-          .sort((a, b) => b.vor - a.vor);
-        const afford = (p) => p.model <= st.maxBid;
-        // starter-caliber names first (top 15 by talent), best edge among those I can pay for
-        const picks = talent.slice(0, 15).filter(afford)
-          .sort((a, b) => (b.edge - a.edge) || (b.vor - a.vor)).slice(0, 3);
-        const fill = (src) => src.filter((p) => !picks.includes(p)).slice(0, 3 - picks.length).forEach((p) => picks.push(p));
-        if (picks.length < 3) fill(talent.filter(afford));   // money is tight: best I can actually pay for
-        if (picks.length < 3) fill(talent);                   // still short: show the talent, marked over max
-        return { slot: sl.label, id: sl.id,
-                 cands: picks.map((p) => ({ ...p, stretch: p.model > st.maxBid, byeClash: (clash(p) || {}).name || null })) };
-      });
-      // ---- your number: what each player is worth to THIS roster ----
-      // Model $ says what a player is worth to a lineup in general. Your
-      // number adjusts it for your seat: a premium when he fills an open
-      // starter slot and the drop to the next name you could afford is steep
-      // (more if the position is thin or he's the last of his tier), scaled
-      // by how flush you are against the room -- a seat poorer than the room
-      // never chases; a bench piece is capped at a bench price; and nothing
-      // exceeds your max bid. This is the number the clock panel argues from.
+      // how flush this seat is: money per open spot against the room's
       const leagueAvg = openSpots ? moneyLeft / openSpots : 0;
       const richness = leagueAvg ? Math.min(1.5, Math.max(0.5, st.avgPerOpen / leagueAvg)) : 1;
       const starterOpen = openSlots.filter((sl) => sl.takes);
@@ -281,8 +255,6 @@ window.GuideModel = (function () {
       // a small haircut for sharing a bye with a starter you already have at
       // the position; capped by your max bid, by what leaves the rest of your
       // starters fillable, and at $3 for K and D/ST.
-      const minRest = (row) => planRows.filter((r) => r !== row)
-        .reduce((s, r) => s + (r.list.length ? Math.max(1, r.list[r.list.length - 1].model) : 1), 0);
       const perSpot = `($${Math.round(st.avgPerOpen)} vs $${Math.round(leagueAvg)} a spot)`;
       const seatNote = richness < 0.85 ? `seat is poorer than the room ${perSpot}`
         : richness < 0.97 ? `seat is a bit poorer than the room ${perSpot}`
@@ -321,13 +293,31 @@ window.GuideModel = (function () {
         }
         const cl = clash(p);
         if (cl) { num *= 0.96; bits.push(`shares bye ${p.bye} with ${cl.name}`); }
-        const feasible = pr ? st.remaining - plan.bench - minRest(pr) : st.maxBid;
-        let payTo = Math.round(Math.min(st.maxBid, feasible, num));
+        let payTo = Math.round(Math.min(st.maxBid, num));   // max bid already keeps $1 for every other spot
         if (p.pos === 'K' || p.pos === 'D/ST') payTo = Math.min(payTo, 3);
         p.payTo = Math.max(st.maxBid >= 1 ? 1 : 0, payTo);
         if (p.payTo === st.maxBid && num > st.maxBid) bits.push('capped by your max bid');
-        else if (pr && feasible < num && p.payTo === Math.round(feasible)) bits.push(`leaves $${minRest(pr)} to finish your other starters`);
         p.why = bits.join(' · ');
+      });
+      // "Best value for you", per open starter slot: legal for the slot, in
+      // reach (the room's price is inside your max bid), ranked by YOUR edge --
+      // your number minus what the room will likely pay -- among the
+      // starter-caliber names (top 15 by talent) first. If fewer than three
+      // are in reach the list is topped up by talent and those are marked as
+      // a stretch. A bye shared with a starter you already have at the
+      // position is flagged.
+      const youEdge = (p) => p.payTo - p.mkt;
+      const targets = starterOpen.map((sl) => {
+        const talent = avail.filter((p) => sl.takes.includes(p.pos) && p.payTo > 0)
+          .sort((a, b) => b.vor - a.vor);
+        const reach = (p) => p.mkt <= st.maxBid;
+        const picks = talent.slice(0, 15).filter(reach)
+          .sort((a, b) => (youEdge(b) - youEdge(a)) || (b.vor - a.vor)).slice(0, 3);
+        const fill = (src) => src.filter((p) => !picks.includes(p)).slice(0, 3 - picks.length).forEach((p) => picks.push(p));
+        if (picks.length < 3) fill(talent.filter(reach));
+        if (picks.length < 3) fill(talent);
+        return { slot: sl.label, id: sl.id,
+                 cands: picks.map((p) => ({ ...p, youEdge: youEdge(p), stretch: !reach(p), byeClash: (clash(p) || {}).name || null })) };
       });
       me = { name: t.name, remaining: st.remaining, maxBid: st.maxBid, open: st.open,
              tax: st.tax, needs: openSlots.map((sl) => sl.label), targets,

@@ -14,7 +14,7 @@
   if (!TABS.includes(tab)) tab = 'ALL';
   let q = '';
   let dmode = localStorage.getItem('sfg-dmode') || 'order';   // drafted view: order | pos | team
-  let sortMode = localStorage.getItem('sfg-sort') === 'edge' ? 'edge' : 'model';   // ALL tab
+  let sortMode = ['edge', 'you'].includes(localStorage.getItem('sfg-sort')) ? localStorage.getItem('sfg-sort') : 'model';   // ALL tab
   let clock = null;                                            // who's on the clock, from the board
   let watch = new Set();                                       // your watch list (this device)
   try { watch = new Set(JSON.parse(localStorage.getItem('sfg-watch') || '[]')); } catch (e) {}
@@ -35,7 +35,7 @@
   });
   $('q').addEventListener('input', () => { q = $('q').value.trim().toLowerCase(); renderBoard(); });
   $('sort-btn').addEventListener('click', () => {
-    sortMode = sortMode === 'model' ? 'edge' : 'model';
+    sortMode = sortMode === 'model' ? 'edge' : sortMode === 'edge' ? 'you' : 'model';
     try { localStorage.setItem('sfg-sort', sortMode); } catch (err) { /* private mode */ }
     renderBoard();
   });
@@ -186,13 +186,13 @@
 
   function renderTargets() {
     if (!R || !R.me || !R.me.targets.length) { $('targets').innerHTML = ''; return; }
-    $('targets').innerHTML = `<div class="tcap">Best value for <b>your</b> board · legal for the slot · inside your max bid · ranked by what you'd save vs the room</div>
+    $('targets').innerHTML = `<div class="tcap">Best value for <b>your</b> board · legal for the slot · in reach of your max bid · ranked by your number minus what the room will pay</div>
       <div class="tgrid">${R.me.targets.map((t) => `
       <div class="tslot">
         <h5>${esc(t.slot)} · best value for you</h5>
         ${t.cands.length ? t.cands.map((p) => `
-          <div class="tc${p.stretch ? ' stretch' : ''}"><span class="nm">${esc(p.name)}${p.byeClash ? `<i class="clash" title="same bye as ${esc(p.byeClash)}">bye ${p.bye} · same as ${esc(p.byeClash.split(' ').pop())}</i>` : ''}${p.stretch ? '<i class="clash st">over your max</i>' : ''}</span>
-            <span class="pr">${money(p.model)}<small>mkt ${money(p.mkt)}</small>${edgeHtml(p.edge)}</span></div>`).join('')
+          <div class="tc${p.stretch ? ' stretch' : ''}"><span class="nm">${esc(p.name)}${p.byeClash ? `<i class="clash" title="same bye as ${esc(p.byeClash)}">bye ${p.bye} · same as ${esc(p.byeClash.split(' ').pop())}</i>` : ''}${p.stretch ? '<i class="clash st">room price is over your max</i>' : ''}</span>
+            <span class="pr">${money(p.payTo)}<small>you · room ${money(p.mkt)}</small>${edgeHtml(p.youEdge)}</span></div>`).join('')
           : '<div class="tc"><span class="nm" style="color:var(--faint)">nobody left</span></div>'}
       </div>`).join('')}</div>`;
   }
@@ -291,9 +291,11 @@
     if (!R) { $('board').innerHTML = '<div class="empty">waiting for the board…</div>'; return; }
     let rows = [];
     if (tab === 'ALL') {
-      rows = R.avail.filter((p) => p.proj > 0 || p.aav > 0)
-        .sort(sortMode === 'edge' ? ((a, b) => b.edge - a.edge || b.model - a.model)
-                                  : ((a, b) => b.model - a.model || b.proj - a.proj)).slice(0, 160);
+      rows = R.avail.filter((p) => p.proj > 0 || p.aav > 0);
+      if (sortMode === 'you') rows = rows.filter((p) => p.payTo > 0).sort((a, b) => (b.payTo - b.mkt) - (a.payTo - a.mkt) || b.payTo - a.payTo);
+      else if (sortMode === 'edge') rows.sort((a, b) => b.edge - a.edge || b.model - a.model);
+      else rows.sort((a, b) => b.model - a.model || b.proj - a.proj);
+      rows = rows.slice(0, 160);
     } else if (tab === 'ROOKIES' || tab === '2ND YR') {
       const key = tab === 'ROOKIES' ? 'rookie' : 'soph';
       rows = R.avail.filter((p) => p[key] && (p.proj > 0 || p.aav > 0)).sort((a, b) => b.model - a.model || b.proj - a.proj);
@@ -314,7 +316,7 @@
     if (q) rows = R.avail.filter((p) => p.name.toLowerCase().includes(q)).sort((a, b) => b.model - a.model);
     if (tab !== 'WATCH') $('count').textContent = `${rows.length} available`;
     $('sort-btn').hidden = tab !== 'ALL' || !!q;
-    $('sort-btn').textContent = 'Sort: ' + (sortMode === 'edge' ? 'Edge' : 'Model');
+    $('sort-btn').textContent = 'Sort: ' + (sortMode === 'edge' ? 'Edge' : sortMode === 'you' ? 'You' : 'Model');
     if (!rows.length) { $('board').innerHTML = '<div class="empty">nobody matches</div>'; return; }
     const byPosView = tab !== 'ALL' && !q;
     let lastTier = 0;
