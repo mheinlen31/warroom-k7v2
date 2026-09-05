@@ -47,6 +47,92 @@ def img(name, pos, pid):
     return f"https://a.espncdn.com/i/headshots/nfl/players/full/{pid}.png" if pid else None
 
 
+# ------------------------------------------------------------ bye weeks
+def fetch_bye_weeks():
+    """{'BUF': 7, ...} for the season, from ESPN's pro-team schedule view."""
+    url = f"https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/{SEASON}?view=proTeamSchedules_wl"
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(req, timeout=60) as r:
+        teams = json.load(r)["settings"]["proTeams"]
+    return {t["abbrev"]: t.get("byeWeek") for t in teams if t.get("id") and t.get("byeWeek")}
+
+
+# ------------------------------------------------------------ 2025 actuals
+# ESPN stat ids, checked against 2025 totals (Gibbs 1,223 rush yds = id 24 ...)
+STAT_IDS = {
+    "QB":   {"py": 3, "ptd": 4, "int": 20, "ry": 24, "rtd": 25},
+    "RB":   {"ra": 23, "ry": 24, "rtd": 25, "rec": 53, "recy": 42, "rectd": 43},
+    "WR":   {"tgt": 58, "rec": 53, "recy": 42, "rectd": 43, "ry": 24, "rtd": 25},
+    "TE":   {"tgt": 58, "rec": 53, "recy": 42, "rectd": 43},
+    "K":    {"fgm": 83, "fga": 84, "xpm": 86},
+    "D/ST": {"sack": 99, "int": 95, "fr": 96, "pa": 120, "ya": 127},
+}
+DST_TD_IDS = (101, 102, 103, 104)   # KR, PR, INT-return, FR-return touchdowns (106 is not a TD)
+
+
+def last_season(p, pos):
+    """2025 actuals: fantasy points under the league-default (PPR) scoring, games,
+    and the handful of raw stats that matter for the position."""
+    for s in p.get("stats") or []:
+        if (s.get("statSourceId") == 0 and s.get("statSplitTypeId") == 0
+                and s.get("seasonId") == SEASON - 1):
+            raw = s.get("stats") or {}
+            g = lambda i: raw.get(str(i), 0) or 0
+            out = {k: round(g(i)) for k, i in STAT_IDS.get(pos, {}).items()}
+            if pos == "D/ST":
+                out["td"] = round(sum(g(i) for i in DST_TD_IDS))
+            return {"fp25": round(float(s.get("appliedTotal") or 0), 1), "gp25": round(g(210)), "s25": out}
+    return {"fp25": None, "gp25": None, "s25": None}
+
+
+# ------------------------------------------------------------ experience
+EXP_CACHE = ROOT / "data" / "experience.json"
+
+
+def fetch_experience(ids):
+    """{id: {'years': n, 'draftYear': y}} from ESPN's core athlete endpoint,
+    cached on disk so a rebuild only fetches players it hasn't seen."""
+    import concurrent.futures
+    cache = {}
+    if EXP_CACHE.exists():
+        try:
+            cache = json.loads(EXP_CACHE.read_text())
+        except ValueError:
+            cache = {}
+    todo = [i for i in ids if i and str(i) not in cache]
+
+    def one(pid):
+        url = f"https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/athletes/{pid}"
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=20) as r:
+                a = json.load(r)
+            return str(pid), {"years": (a.get("experience") or {}).get("years"),
+                              "draftYear": (a.get("draft") or {}).get("year")}
+        except Exception:
+            return str(pid), {"years": None, "draftYear": None}
+
+    if todo:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=16) as ex:
+            for pid, rec in ex.map(one, todo):
+                cache[pid] = rec
+        EXP_CACHE.parent.mkdir(exist_ok=True)
+        EXP_CACHE.write_text(json.dumps(cache))
+        print(f"experience: fetched {len(todo)}, cached {len(cache)}")
+    return cache
+
+
+def experience_flags(rec):
+    """rookie = entering year 1 (2026 draft class or an undrafted first-year);
+    soph = entering year 2 (the 2025 class)."""
+    if not rec:
+        return False, False
+    dy, yrs = rec.get("draftYear"), rec.get("years")
+    if dy:
+        return dy == SEASON, dy == SEASON - 1
+    return yrs == 1, yrs == 2
+
+
 def projection(p):
     """ESPN's projected season total: statSourceId 1 = projection,
     statSplitTypeId 0 = full season."""
@@ -226,6 +312,7 @@ def main():
         cons = round(sum(ppr) / len(ppr), 1) if ppr else None
         spread = (max(ppr) - min(ppr)) if len(ppr) > 1 else 0
         rec = {
+            "id": p.get("id"),
             "name": name, "pos": pos,
             "nfl": PRO_TEAM.get(p.get("proTeamId")) if pos != "D/ST" else None,
             "img": img(name, pos, p.get("id")),
@@ -235,12 +322,26 @@ def main():
             "proj": projection(p),
             "inj": None if not inj or inj == "ACTIVE" else inj,
             "cons": cons, "spread": spread, "nrank": len(ppr),
+            **last_season(p, pos),
         }
         if rank <= OUTLOOK_TOP and p.get("seasonOutlook"):
             o = re.sub(r"\s+", " ", p["seasonOutlook"]).strip()
             rec["outlook"] = (o[:300] + "…") if len(o) > 300 else o
         out.append(rec)
 
+    # bye weeks (D/ST rows carry the team nickname; map it to the abbreviation)
+    byes = fetch_bye_weeks()
+    for rec in out:
+        ab = rec["nfl"] or (NFL_ABBR.get(norm(rec["name"]), "").upper() if rec["pos"] == "D/ST" else None)
+        rec["bye"] = byes.get(ab) if ab else None
+    print("bye weeks:", sum(1 for r in out if r["bye"]), "of", len(out))
+    # experience -> rookie / second-year flags
+    expc = fetch_experience([r["id"] for r in out if r["pos"] != "D/ST"])
+    for rec in out:
+        rk, so = experience_flags(expc.get(str(rec["id"])))
+        rec["rookie"], rec["soph"] = rk, so
+        rec.pop("id", None)
+    print("rookies:", sum(1 for r in out if r["rookie"]), "| second-year:", sum(1 for r in out if r["soph"]))
     blend(out, read_sources())
     out.sort(key=lambda x: (x["rank"], -x["aav"], x["name"]))
     payload = {"season": SEASON,

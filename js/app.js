@@ -6,7 +6,7 @@
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const POOL = (window.GUIDE_PLAYERS || {}).players || [];
   const M = window.GuideModel;
-  const TABS = ['ALL', 'QB', 'RB', 'WR', 'TE', 'K', 'D/ST', 'WATCH', 'DRAFTED'];
+  const TABS = ['ALL', 'QB', 'RB', 'WR', 'TE', 'K', 'D/ST', 'ROOKIES', '2ND YR', 'WATCH', 'DRAFTED'];
   const posClass = (p) => 'pos-' + String(p).replace('/', '');
 
   let me = localStorage.getItem('sfg-me') || 'Silent Pugios';
@@ -57,6 +57,24 @@
   const money = (n) => '$' + Math.round(n);
   const edgeHtml = (e) => e > 0 ? `<span class="pos-edge">+$${e}</span>`
     : e < 0 ? `<span class="neg-edge">−$${Math.abs(e)}</span>` : '<span class="zero-edge">—</span>';
+  /* last season, in the stats that score for the position; ESPN default PPR */
+  function statLine(p) {
+    const s = p.s25, fp = p.fp25;
+    if (!s) return p.rookie ? '2025: rookie — no NFL season yet' : '2025: no stats';
+    const n = (v) => (v == null ? 0 : v).toLocaleString();
+    let core;
+    switch (p.pos) {
+      case 'QB': core = `${n(s.py)} pass yds · ${s.ptd} TD · ${s.int} INT · ${n(s.ry)} rush · ${s.rtd} rTD`; break;
+      case 'RB': core = `${n(s.ry)} rush · ${s.rtd} TD · ${s.rec} rec · ${n(s.recy)} yds · ${s.rectd} TD`; break;
+      case 'WR': core = `${s.rec}/${s.tgt} rec · ${n(s.recy)} yds · ${s.rectd} TD${s.ry > 40 ? ` · ${n(s.ry)} rush` : ''}`; break;
+      case 'TE': core = `${s.rec}/${s.tgt} rec · ${n(s.recy)} yds · ${s.rectd} TD`; break;
+      case 'K': core = `${s.fgm}/${s.fga} FG · ${s.xpm} XP`; break;
+      default:   core = `${s.sack} sacks · ${s.int} INT · ${s.fr} FR · ${s.td} TD · ${n(s.pa)} pts allowed`;
+    }
+    return `2025: ${core} · <b>${fp} pts</b>${p.gp25 ? ` in ${p.gp25}` : ''}`;
+  }
+  const yearTag = (p) => p.rookie ? '<span class="yr r">R</span>' : p.soph ? '<span class="yr">2Y</span>' : '';
+  const byeTag = (p) => p.bye ? `<span class="bye">bye ${p.bye}</span>` : '';
   const injHtml = (p) => !p.inj ? '' : p.inj === 'QUESTIONABLE'
     ? '<span class="inj q">Q</span>' : `<span class="inj">${esc(p.inj[0] + p.inj.slice(1, 3).toLowerCase())}</span>`;
 
@@ -305,6 +323,9 @@
       rows = R.avail.filter((p) => p.proj > 0 || p.aav > 0)
         .sort(sortMode === 'edge' ? ((a, b) => b.edge - a.edge || b.model - a.model)
                                   : ((a, b) => b.model - a.model || b.proj - a.proj)).slice(0, 160);
+    } else if (tab === 'ROOKIES' || tab === '2ND YR') {
+      const key = tab === 'ROOKIES' ? 'rookie' : 'soph';
+      rows = R.avail.filter((p) => p[key] && (p.proj > 0 || p.aav > 0)).sort((a, b) => b.model - a.model || b.proj - a.proj);
     } else if (R.byPos[tab]) {                       // a position tab; WATCH is handled below
       rows = R.byPos[tab].filter((p) => p.proj > 0 || p.aav > 0);
     }
@@ -338,7 +359,8 @@
         <td class="rk">${byPosView ? p.posRank : i + 1}</td>
         <td class="pl"><div class="nm">${esc(p.name)}</div>
           <div class="meta"><span class="pos ${posClass(p.pos)}">${esc(p.pos)}${byPosView ? '' : p.posRank}</span>
-            ${p.nfl ? `<span>${esc(p.nfl)}</span>` : ''}${injHtml(p)}${cons ? `<span>${cons}</span>` : ''}</div></td>
+            ${p.nfl ? `<span>${esc(p.nfl)}</span>` : ''}${byeTag(p)}${yearTag(p)}${injHtml(p)}${cons ? `<span>${cons}</span>` : ''}</div>
+          <div class="meta2">${statLine(p)}</div></td>
         <td class="proj wide">${p.proj ? p.proj.toFixed(0) : '—'}</td>
         <td class="model">${money(p.model)}</td>
         <td class="mkt">${money(p.mkt)}</td>
@@ -413,7 +435,8 @@
         <div>
           <div class="oc-eyebrow"><span class="dot"></span>On the clock${watch.has(p.name) ? ' <i class="wflag">★ on your watch list</i>' : ''}</div>
           <div class="oc-name">${esc(p.name)}</div>
-          <div class="oc-sub"><span class="pos ${posClass(p.pos)}">${esc(p.pos)}${p.posRank}</span>${p.nfl ? ' · ' + esc(p.nfl) : ''} · proj ${p.proj.toFixed(0)} · tier ${p.tier}${p.cliff ? ' · cliff after him' : ''}${p.cons ? ` · cons ${p.cons}${p.nsrc > 1 ? ` (${p.nsrc} src)` : ''}` : ''}${injHtml(p) ? ' · ' + injHtml(p) : ''}</div>
+          <div class="oc-sub"><span class="pos ${posClass(p.pos)}">${esc(p.pos)}${p.posRank}</span>${p.nfl ? ' · ' + esc(p.nfl) : ''}${p.bye ? ` · bye ${p.bye}` : ''}${p.rookie ? ' · rookie' : p.soph ? ' · 2nd year' : ''} · proj ${p.proj.toFixed(0)} · tier ${p.tier}${p.cliff ? ' · cliff after him' : ''}${p.cons ? ` · cons ${p.cons}${p.nsrc > 1 ? ` (${p.nsrc} src)` : ''}` : ''}${injHtml(p) ? ' · ' + injHtml(p) : ''}</div>
+        <div class="oc-sub oc-last">${statLine(p)}</div>
         </div>
         <div class="oc-bid"><span>current bid</span><b>${bid ? '$' + bid : '—'}</b></div>
       </div>

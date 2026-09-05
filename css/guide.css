@@ -211,3 +211,12 @@ table.rb .tl { font-family:var(--display); font-weight:800; font-size:15px; colo
 table.rb .tm, table.rb .to { color:var(--soft); text-align:right; font-size:11px; }
 table.rb tr.me td { background:rgba(255,201,74,.07); }
 @media (min-width:760px) { #cockpit2 { grid-template-columns:repeat(4, minmax(0,1fr)); } }
+
+/* ---------------- 2025 line, bye, year badges ---------------- */
+.meta2 { font-size:10.5px; color:var(--faint); margin-top:3px; white-space:normal; }
+.meta2 b { color:var(--soft); }
+.bye { color:var(--faint); }
+.yr { font-size:9px; font-weight:800; letter-spacing:.08em; padding:1px 4px; border-radius:2px; background:rgba(255,255,255,.08); color:var(--soft); }
+.yr.r { background:rgba(53,208,127,.16); color:#8ff0bb; }
+.oc-last { margin-top:3px; color:var(--faint); } .oc-last b { color:var(--soft); }
+@media (max-width:640px) { .meta2 { font-size:10px; } }
