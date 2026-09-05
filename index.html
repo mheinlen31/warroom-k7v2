@@ -12,13 +12,15 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@600;700;800&family=Saira:wght@500;600;700&display=swap">
-<link rel="stylesheet" href="css/guide.css?v=202609050822">
+<link rel="stylesheet" href="css/guide.css?v=202609050826">
 </head>
 <body>
 <header class="top">
   <div class="brand"><b>War Room</b><span id="live-pill" class="pill">connecting…</span></div>
   <label class="me-pick"><span>You are</span> <select id="me-select"></select></label>
 </header>
+
+<section class="onclock" id="onclock" hidden></section>
 
 <section class="cockpit" id="cockpit"></section>
 
@@ -29,6 +31,7 @@
 <nav class="tabs" id="tabs"></nav>
 <div class="tools">
   <input id="q" type="search" placeholder="Find a player…" autocomplete="off">
+  <button id="sort-btn" class="dm" type="button" hidden>Sort: Model</button>
   <span class="count" id="count"></span>
 </div>
 
@@ -65,11 +68,11 @@
   <em>spread</em> is how far those rankers disagree.</p>
 </footer>
 
-<script src="js/players.js?v=202609050822"></script>
-<script src="js/engine.js?v=202609050822"></script>
-<script src="js/trends.js?v=202609050822"></script>
-<script src="js/live.js?v=202609050822"></script>
-<script src="js/model.js?v=202609050822"></script>
-<script src="js/app.js?v=202609050822"></script>
+<script src="js/players.js?v=202609050826"></script>
+<script src="js/engine.js?v=202609050826"></script>
+<script src="js/trends.js?v=202609050826"></script>
+<script src="js/live.js?v=202609050826"></script>
+<script src="js/model.js?v=202609050826"></script>
+<script src="js/app.js?v=202609050826"></script>
 </body>
 </html>

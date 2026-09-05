@@ -136,3 +136,27 @@ table.ladder td.l b { font-family:var(--data); font-size:10px; letter-spacing:.0
 .dm { font:800 11px var(--data); letter-spacing:.08em; text-transform:uppercase; padding:7px 11px; border-radius:3px; border:1px solid var(--line2); background:var(--panel); color:var(--soft); cursor:pointer; }
 .dm.on { background:var(--gold); border-color:var(--gold); color:#1a1300; }
 td.team-cell { text-align:left; font-size:11px; color:var(--soft); text-transform:uppercase; letter-spacing:.06em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:150px; }
+
+/* ---------------- on the clock ---------------- */
+.onclock { padding:10px 12px 0; }
+.oc-card { background:linear-gradient(180deg,#16203a,#0f1626); border:1px solid var(--line2); border-left:6px solid var(--red); border-radius:5px; padding:12px 14px; box-shadow:0 10px 30px rgba(0,0,0,.45); }
+.oc-card.go { border-left-color:var(--green); } .oc-card.stop { border-left-color:var(--red); }
+.oc-top { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
+.oc-eyebrow { font-size:9.5px; font-weight:800; letter-spacing:.2em; text-transform:uppercase; color:var(--red); display:flex; align-items:center; gap:6px; }
+.oc-eyebrow .dot { width:7px; height:7px; border-radius:50%; background:var(--red); animation:ocpulse 1.6s ease-in-out infinite; }
+@keyframes ocpulse { 0%,100%{opacity:1} 50%{opacity:.25} }
+.oc-name { font-family:var(--display); font-weight:800; font-size:clamp(28px,7vw,44px); line-height:.95; text-transform:uppercase; margin:4px 0 4px; }
+.oc-sub { font-size:12px; color:var(--soft); } .oc-sub .pos { font-weight:800; letter-spacing:.08em; }
+.oc-bid { text-align:right; flex:0 0 auto; }
+.oc-bid span { display:block; font-size:9px; font-weight:800; letter-spacing:.14em; text-transform:uppercase; color:var(--faint); }
+.oc-bid b { font-family:var(--display); font-weight:800; font-size:clamp(30px,8vw,48px); color:var(--gold); line-height:1; }
+.oc-nums { display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end; margin-top:10px; }
+.oc-nums .stat b { font-size:24px; } .oc-nums .stat.big b { font-size:32px; }
+.oc-verdict { margin-top:10px; padding:9px 12px; border-radius:4px; font:700 15px var(--data); background:rgba(255,255,255,.05); }
+.oc-card.go .oc-verdict { background:rgba(53,208,127,.14); color:#8ff0bb; } .oc-card.stop .oc-verdict { background:rgba(224,27,36,.14); color:#ff9a9e; }
+.oc-verdict b { color:#fff; }
+.oc-foot { display:flex; flex-direction:column; gap:4px; margin-top:9px; font-size:12px; color:var(--soft); }
+.oc-foot b { color:var(--ink); }
+tr.onclock td { background:rgba(224,27,36,.12); box-shadow:inset 3px 0 0 var(--red); }
+#sort-btn { flex:0 0 auto; }
+@media (prefers-reduced-motion:reduce) { .oc-eyebrow .dot { animation:none; } }

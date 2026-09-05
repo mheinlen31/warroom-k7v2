@@ -46,6 +46,12 @@ window.LiveDraft = (function () {
       return connect().then(() =>
         mod.onValue(mod.ref(db, `trips/${ROOM}/state`), (s) => cb(normalize(s.val()))));
     },
+    /* who's on the clock and the current bid, written by the board; null when
+       nobody is up */
+    subscribeClock(cb) {
+      return connect().then(() =>
+        mod.onValue(mod.ref(db, `trips/${ROOM}/clock`), (s) => cb(s.val() || null)));
+    },
     onConnectionChange(cb) {
       return connect().then(() =>
         mod.onValue(mod.ref(db, ".info/connected"), (s) => cb(!!s.val())));

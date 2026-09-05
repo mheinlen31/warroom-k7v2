@@ -14,6 +14,9 @@
   if (!TABS.includes(tab)) tab = 'ALL';
   let q = '';
   let dmode = localStorage.getItem('sfg-dmode') || 'order';   // drafted view: order | pos | team
+  let sortMode = localStorage.getItem('sfg-sort') === 'edge' ? 'edge' : 'model';   // ALL tab
+  let clock = null;                                            // who's on the clock, from the board
+  const E = window.DraftEngine;
   let state = null;
   let R = null;   // last model result
 
@@ -27,6 +30,11 @@
     renderBoard();
   });
   $('q').addEventListener('input', () => { q = $('q').value.trim().toLowerCase(); renderBoard(); });
+  $('sort-btn').addEventListener('click', () => {
+    sortMode = sortMode === 'model' ? 'edge' : 'model';
+    try { localStorage.setItem('sfg-sort', sortMode); } catch (err) { /* private mode */ }
+    renderBoard();
+  });
   $('board').addEventListener('click', (e) => {
     const b = e.target.closest('.dm'); if (!b) return;
     dmode = b.dataset.m; try { localStorage.setItem('sfg-dmode', dmode); } catch (err) { /* private mode */ }
@@ -184,16 +192,20 @@
   }
 
   function renderBoard() {
-    if (tab === 'DRAFTED') { if (!state) { $('board').innerHTML = '<div class="empty">waiting for the board…</div>'; return; } renderDrafted(); return; }
+    if (tab === 'DRAFTED') { $('sort-btn').hidden = true; if (!state) { $('board').innerHTML = '<div class="empty">waiting for the board…</div>'; return; } renderDrafted(); return; }
     if (!R) { $('board').innerHTML = '<div class="empty">waiting for the board…</div>'; return; }
     let rows;
     if (tab === 'ALL') {
-      rows = R.avail.filter((p) => p.proj > 0 || p.aav > 0).sort((a, b) => b.model - a.model || b.proj - a.proj).slice(0, 160);
+      rows = R.avail.filter((p) => p.proj > 0 || p.aav > 0)
+        .sort(sortMode === 'edge' ? ((a, b) => b.edge - a.edge || b.model - a.model)
+                                  : ((a, b) => b.model - a.model || b.proj - a.proj)).slice(0, 160);
     } else {
       rows = R.byPos[tab].filter((p) => p.proj > 0 || p.aav > 0);
     }
     if (q) rows = R.avail.filter((p) => p.name.toLowerCase().includes(q)).sort((a, b) => b.model - a.model);
     $('count').textContent = `${rows.length} available`;
+    $('sort-btn').hidden = tab !== 'ALL' || !!q;
+    $('sort-btn').textContent = 'Sort: ' + (sortMode === 'edge' ? 'Edge' : 'Model');
     if (!rows.length) { $('board').innerHTML = '<div class="empty">nobody matches</div>'; return; }
     const byPosView = tab !== 'ALL' && !q;
     let lastTier = 0;
@@ -204,7 +216,7 @@
         head = `<tr class="tier-head"><td colspan="8">Tier ${p.tier}</td></tr>`;
       }
       const cons = p.cons ? `cons ${p.cons}${p.spread > 8 ? ` <span title="rankers disagree">±${p.spread}</span>` : ''}` : '';
-      return head + `<tr class="${p.cliff && byPosView ? 'cliff' : ''}">
+      return head + `<tr class="${p.cliff && byPosView ? 'cliff' : ''}" data-n="${esc(p.name)}">
         <td class="rk">${byPosView ? p.posRank : i + 1}</td>
         <td class="pl"><div class="nm">${esc(p.name)}</div>
           <div class="meta"><span class="pos ${posClass(p.pos)}">${esc(p.pos)}${byPosView ? '' : p.posRank}</span>
@@ -228,6 +240,65 @@
       `<span class="rp"><b>${esc(p.name)}</b><i>$${p.cost}</i><em>${esc(p.team)}</em></span>`).join('')}</div>` : '';
   }
 
+  /* ON THE CLOCK. The board publishes the nomination and the bid as it climbs;
+     this is the moment the whole page exists for. Everything the model knows
+     about the player, compressed to one decision line. */
+  function renderClock() {
+    const box = $('onclock');
+    document.querySelectorAll('#board tr.onclock').forEach((r) => r.classList.remove('onclock'));
+    if (!clock || !clock.name) { box.hidden = true; box.innerHTML = ''; return; }
+    box.hidden = false;
+    const bid = +clock.bid || 0;
+    const norm = E.normName;
+    const p = R ? R.avail.find((x) => norm(x.name) === norm(clock.name)) : null;
+    const meT = (state && state.teams || []).find((t) => t.name === me);
+    const meSt = meT ? E.teamState(meT) : null;
+    if (!p) {
+      box.innerHTML = `<div class="oc-card"><div class="oc-eyebrow"><span class="dot"></span>On the clock</div>
+        <div class="oc-name">${esc(clock.name)}</div>
+        <div class="oc-sub">${R ? 'just sold — or not in the pool' : 'loading the board…'}</div></div>`;
+      return;
+    }
+    const row = document.querySelector(`#board tr[data-n="${clock.name.replace(/"/g, '&quot;')}"]`);
+    if (row) row.classList.add('onclock');
+    // who can still raise: needs a max bid ABOVE the current one and a legal slot
+    const raisers = (state.teams || []).map((t) => ({ t, st: E.teamState(t) }))
+      .filter(({ t, st }) => st.open > 0 && st.maxBid > bid && E.canRoster(t, p.pos).ok)
+      .sort((a, b) => b.st.maxBid - a.st.maxBid);
+    const meCan = meT ? E.canRoster(meT, p.pos) : { ok: false, why: '' };
+    const myMax = meSt ? meSt.maxBid : 0;
+    let verdict, cls;
+    if (!meCan.ok) { verdict = `You can't roster him — ${esc(meCan.why || 'position full')}`; cls = 'stop'; }
+    else if (myMax <= bid) { verdict = `Out of your range — your max is $${myMax}`; cls = 'stop'; }
+    else if (bid < p.model) { verdict = `Worth up to <b>$${Math.min(p.model, myMax)}</b> to you${p.model > myMax ? ' (capped by your max)' : ''}`; cls = 'go'; }
+    else { verdict = `Past his value — let him go above <b>$${p.model}</b>`; cls = 'stop'; }
+    const alts = R.byPos[p.pos].filter((x) => x !== p && x.vor > 0).slice(0, 3);
+    const sc = R.scarcity[p.pos];
+    box.innerHTML = `<div class="oc-card ${cls}">
+      <div class="oc-top">
+        <div>
+          <div class="oc-eyebrow"><span class="dot"></span>On the clock</div>
+          <div class="oc-name">${esc(p.name)}</div>
+          <div class="oc-sub"><span class="pos ${posClass(p.pos)}">${esc(p.pos)}${p.posRank}</span>${p.nfl ? ' · ' + esc(p.nfl) : ''} · proj ${p.proj.toFixed(0)} · tier ${p.tier}${p.cliff ? ' · cliff after him' : ''}${injHtml(p) ? ' · ' + injHtml(p) : ''}</div>
+        </div>
+        <div class="oc-bid"><span>current bid</span><b>${bid ? '$' + bid : '—'}</b></div>
+      </div>
+      <div class="oc-nums">
+        <div class="stat big"><b>$${p.model}</b><span>worth to a lineup</span></div>
+        <div class="stat"><b>$${p.mkt}</b><span>room likely pays</span></div>
+        <div class="stat"><b class="${p.edge > 0 ? 'pos-edge' : p.edge < 0 ? 'neg-edge' : ''}">${p.edge > 0 ? '+' : ''}$${p.edge}</b><span>edge</span></div>
+        <div class="stat"><b>$${myMax}</b><span>your max</span></div>
+        <div class="stat"><b>${raisers.length}</b><span>can still raise</span></div>
+      </div>
+      <div class="oc-verdict">${verdict}</div>
+      <div class="oc-foot">
+        <span><b>Can raise:</b> ${raisers.length ? raisers.slice(0, 5).map(({ t, st }) => `${esc(t.name)} $${st.maxBid}`).join(' · ') + (raisers.length > 5 ? ` · +${raisers.length - 5}` : '') : 'nobody'}</span>
+        <span><b>${esc(p.pos)} left:</b> ${sc.solid} solid · ${sc.label}</span>
+        <span><b>Next best:</b> ${alts.length ? alts.map((x) => `${esc(x.name)} $${x.model}`).join(' · ') : 'nobody worth paying for'}</span>
+      </div>
+    </div>`;
+  }
+
   function renderMeSelect() {
     const names = (state && state.teams || []).map((t) => t.name);
     if (!names.length) return;
@@ -237,7 +308,7 @@
 
   function render() {
     R = state ? M.compute(POOL, state, me) : null;
-    renderMeSelect(); renderCockpit(); renderTargets(); renderTrends(); renderBoard(); renderRecent();
+    renderMeSelect(); renderCockpit(); renderTargets(); renderTrends(); renderBoard(); renderRecent(); renderClock();
   }
 
   // sticky offsets: measure the real header + tabs heights (the top bar wraps
@@ -254,6 +325,7 @@
   const pill = $('live-pill');
   window.LiveDraft.subscribe((st) => { state = st; pill.className = 'pill live'; pill.textContent = 'Live'; render(); })
     .catch(() => { pill.className = 'pill off'; pill.textContent = 'Offline'; render(); });
+  window.LiveDraft.subscribeClock((c) => { clock = c; renderClock(); }).catch(() => {});
   window.LiveDraft.onConnectionChange((up) => {
     pill.className = 'pill ' + (up ? 'live' : 'off'); pill.textContent = up ? 'Live' : 'Reconnecting';
   }).catch(() => {});
