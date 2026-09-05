@@ -53,6 +53,13 @@
   function renderCockpit() {
     if (!R) return;
     const L = R.league, me_ = R.me;
+    // what the room has actually paid against ESPN so far, and any run on a position
+    const picks = (state && state.picks) || [];
+    const withAav = picks.filter((p) => p.aav > 0);
+    const paid = { n: withAav.length, ratio: withAav.length ? withAav.reduce((s, p) => s + p.cost, 0) / withAav.reduce((s, p) => s + Math.max(1, p.aav), 0) : 1 };
+    const last5 = picks.slice(-5).map((p) => p.pos);
+    let run = null;
+    if (last5.length >= 3) { const c = {}; last5.forEach((p) => { c[p] = (c[p] || 0) + 1; }); const top = Object.entries(c).sort((a, b) => b[1] - a[1])[0]; if (top && top[1] >= 3) run = { pos: top[0], n: top[1] }; }
     const seat = me_ ? `
       <div class="card">
         <h4>${esc(me_.name)}</h4>
@@ -75,7 +82,9 @@
           <div class="stat"><b>${L.openSpots}</b><span>open spots</span></div>
           <div class="stat"><b>${L.inflation.toFixed(2)}×</b><span>inflation</span></div>
           <div class="stat"><b>${L.picks}</b><span>picks</span></div>
+          ${paid.n >= 5 ? `<div class="stat"><b>${paid.ratio.toFixed(2)}×</b><span>paying vs ESPN</span></div>` : ''}
         </div>
+        ${run ? `<div class="fact run"><b>${esc(run.pos)} run</b> — ${run.n} of the last 5 picks</div>` : ''}
       </div>`;
     const scar = `
       <div class="card">
@@ -88,6 +97,61 @@
           </div>`; }).join('')}</div>
       </div>`;
     $('cockpit').innerHTML = seat + league + scar;
+  }
+
+  /* Second row of the cockpit: the plan, the drain list, your roster.
+     - PLAN: what to budget for each open starter slot so the money lasts.
+       Uses the second-best value at each slot (you won't land everyone's
+       first choice) and $2 a bench spot -- this league's bench reality.
+     - DRAIN: players the room is likely to overpay for that aren't on your
+       shopping list. Nominate them early and let other budgets bleed.
+     - ROSTER: your lineup taking shape, slot by slot. */
+  function renderPlan() {
+    const box = $('cockpit2');
+    if (!R || !R.me || !state) { box.innerHTML = ''; return; }
+    const me_ = R.me;
+    const meT = (state.teams || []).find((t) => t.name === me);
+    const st = meT ? E.teamState(meT) : null;
+
+    // ---- plan ----
+    const BENCH_EACH = 2;
+    const rows = me_.targets.map((t) => {
+      const pick = t.cands[1] || t.cands[0];
+      return { slot: t.slot, target: pick ? pick.model : 1, who: pick ? pick.name : '—' };
+    });
+    const starters = rows.reduce((s, r) => s + r.target, 0);
+    const bench = me_.benchOpen * BENCH_EACH;
+    const total = starters + bench;
+    const diff = me_.remaining - total;
+    const plan = `<div class="card">
+      <h4>Your plan · $${me_.remaining} to spend</h4>
+      <table class="plan">${rows.map((r) => `<tr><td class="ps ${posClass(r.slot)}">${esc(r.slot)}</td><td class="pw">${esc(r.who)}</td><td class="pt">$${r.target}</td></tr>`).join('')}
+        ${me_.benchOpen ? `<tr><td class="ps">BE ×${me_.benchOpen}</td><td class="pw muted">bench at ~$${BENCH_EACH}</td><td class="pt">$${bench}</td></tr>` : ''}
+        <tr class="tot"><td></td><td>planned</td><td class="pt">$${total}</td></tr>
+        <tr class="tot ${diff >= 0 ? 'ok' : 'bad'}"><td></td><td>${diff >= 0 ? 'cushion' : 'over by'}</td><td class="pt">${diff >= 0 ? '+' : '−'}$${Math.abs(diff)}</td></tr>
+      </table>
+      <div class="fact">${diff >= 0 ? `Room to go $${diff} over on one target and still fill out.` : `Trim $${-diff}: drop a slot a tier, or take the bargains the room leaves.`}</div>
+    </div>`;
+
+    // ---- drain ----
+    const wanted = new Set(me_.targets.flatMap((t) => t.cands.map((c) => c.name)));
+    const drain = R.avail.filter((p) => p.mkt >= 12 && !wanted.has(p.name) && (!meT || !E.canRoster(meT, p.pos).ok || p.edge < 0))
+      .sort((a, b) => (b.mkt - b.model) - (a.mkt - a.model)).slice(0, 6);
+    const drainCard = `<div class="card">
+      <h4>Nominate to drain · the room overpays, you don't want them</h4>
+      ${drain.length ? drain.map((p) => `<div class="dr"><span class="nm">${esc(p.name)}</span><span class="pos ${posClass(p.pos)}">${esc(p.pos)}</span>
+        <span class="drv">room ~<b>$${p.mkt}</b> · worth $${p.model} · ${p.bidders} can pay</span></div>`).join('')
+        : '<div class="fact">Nothing left worth draining.</div>'}
+    </div>`;
+
+    // ---- roster ----
+    const slotsHtml = st ? E.SLOTS.map((sl) => { const p = st.slots[sl.id];
+      return `<div class="rs${p ? '' : ' open'}"><span class="ps ${p ? posClass(p.pos) : ''}">${esc(sl.label)}</span><span class="rn">${p ? esc(p.name) : '—'}</span><span class="rc">${p ? '$' + p.cost : ''}</span></div>`; }).join('') : '';
+    const roster = `<div class="card">
+      <h4>Your roster · ${st ? st.filled : 0}/15${st && st.tax ? ` · tax $${st.tax}` : ''}</h4>
+      <div class="rgrid">${slotsHtml}</div>
+    </div>`;
+    box.innerHTML = plan + drainCard + roster;
   }
 
   function renderTargets() {
@@ -311,7 +375,7 @@
 
   function render() {
     R = state ? M.compute(POOL, state, me) : null;
-    renderMeSelect(); renderCockpit(); renderTargets(); renderTrends(); renderBoard(); renderRecent(); renderClock();
+    renderMeSelect(); renderCockpit(); renderPlan(); renderTargets(); renderTrends(); renderBoard(); renderRecent(); renderClock();
   }
 
   // sticky offsets: measure the real header + tabs heights (the top bar wraps

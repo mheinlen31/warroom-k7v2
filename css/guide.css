@@ -165,3 +165,25 @@ tr.onclock td { background:rgba(224,27,36,.12); box-shadow:inset 3px 0 0 var(--r
 .oc-foot i.chase, .oc-foot i.avoid { font-style:normal; font-size:10px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; padding:1px 5px; border-radius:2px; }
 .oc-foot i.chase { color:#ff9a9e; background:rgba(224,27,36,.18); }
 .oc-foot i.avoid { color:#8ff0bb; background:rgba(53,208,127,.16); }
+
+/* ---------------- plan / drain / roster ---------------- */
+#cockpit2 { padding-top:8px; }
+table.plan { width:100%; border-collapse:collapse; }
+table.plan td { padding:4px 4px; border-bottom:1px solid rgba(36,48,74,.5); font-size:12.5px; background:transparent; text-align:left; }
+table.plan .ps { font-weight:800; letter-spacing:.08em; font-size:10px; width:52px; }
+table.plan .pw { color:var(--soft); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:150px; }
+table.plan .pt { text-align:right; font-family:var(--display); font-weight:800; font-size:15px; color:var(--gold); }
+table.plan tr.tot td { border-bottom:none; color:var(--faint); font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; padding-top:6px; }
+table.plan tr.tot.ok .pt { color:var(--green); } table.plan tr.tot.bad .pt { color:var(--red); }
+.dr { display:flex; align-items:baseline; gap:8px; padding:5px 0; border-bottom:1px solid rgba(36,48,74,.5); font-size:12px; }
+.dr:last-child { border-bottom:none; }
+.dr .nm { font-family:var(--display); font-weight:700; font-size:14.5px; text-transform:uppercase; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.dr .pos { font-weight:800; font-size:10px; letter-spacing:.08em; }
+.dr .drv { margin-left:auto; color:var(--soft); white-space:nowrap; } .dr .drv b { color:var(--red); font-family:var(--display); font-size:14px; }
+.rgrid { display:grid; grid-template-columns:1fr 1fr; gap:2px 12px; }
+.rs { display:flex; align-items:baseline; gap:6px; padding:3px 0; border-bottom:1px solid rgba(36,48,74,.45); font-size:12px; }
+.rs .ps { font-weight:800; letter-spacing:.08em; font-size:9.5px; width:34px; color:var(--faint); }
+.rs .rn { font-family:var(--display); font-weight:700; font-size:13.5px; text-transform:uppercase; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1 1 auto; }
+.rs.open .rn { color:var(--dim); font-weight:500; }
+.rs .rc { font-family:var(--display); font-weight:800; color:var(--gold); }
+.fact.run { margin-top:6px; color:#ffb35c; } .fact.run b { color:#ffb35c; }
