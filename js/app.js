@@ -88,6 +88,50 @@
       </div>`).join('')}</div>`;
   }
 
+  const T = window.GUIDE_TRENDS;
+  function renderTrends() {
+    if (!T) { $('trends').innerHTML = ''; return; }
+    const POS4 = ['QB', 'RB', 'WR', 'TE'];
+    const shareBar = M.POSITIONS.map((p) => {
+      const s = T.share[p] || 0, e = T.shareEarly[p] || 0, d = Math.round((s - e) * 100);
+      return `<div class="sh"><span class="sp ${posClass(p)}">${p}</span>
+        <span class="bar"><i class="${posClass(p)}" style="width:${Math.max(2, s * 100)}%"></i></span>
+        <b>${Math.round(s * 100)}%</b><small>${d ? (d > 0 ? '+' : '') + d + ' vs 2017–20' : 'flat'}</small></div>`;
+    }).join('');
+    const lad = POS4.map((p) => `<tr><td class="l ${posClass(p)}"><b>${p}</b></td>${[1, 2, 3, 5, 8, 12].map((n) =>
+      `<td>${T.ladder[p] && T.ladder[p][n] != null ? '$' + T.ladder[p][n] : '—'}</td>`).join('')}</tr>`).join('');
+    const th = T.topHeavy, hits = T.dollarHits, k = T.kdst;
+    const owners = T.owners.slice().sort((a, b) => Math.abs(b.tilt[b.lean]) - Math.abs(a.tilt[a.lean])).map((o) => {
+      const v = o.tilt[o.lean];
+      return `<div class="ow"><b>${esc(o.owner)}</b><span class="${v > 0 ? 'pos-edge' : 'neg-edge'}">${v > 0 ? 'chases' : 'avoids'} ${o.lean} ${v > 0 ? '+' : ''}${v}%</span>
+        <small>${o.big} picks of $50+ · avg $${o.avg}</small></div>`;
+    }).join('');
+    $('trends').innerHTML = `
+      <div class="card">
+        <h4>How this room spends · ${T.recent[0]}–${String(T.recent[T.recent.length - 1]).slice(2)} auctions, keepers excluded</h4>
+        <div class="tgrid3">
+          <div><div class="sub">Share of auction dollars</div>${shareBar}</div>
+          <div><div class="sub">What the Nth-priciest pick goes for</div>
+            <table class="ladder"><thead><tr><th class="l"></th>${[1, 2, 3, 5, 8, 12].map((n) => `<th>#${n}</th>`).join('')}</tr></thead><tbody>${lad}</tbody></table>
+            <div class="fact"><b>K / D/ST:</b> ${Math.round(k.K.one * 100)}% and ${Math.round(k['D/ST'].one * 100)}% went for $1; ${k.K.threePlus + k['D/ST'].threePlus} of ${k.K.n + k['D/ST'].n} ever hit $3.</div></div>
+          <div><div class="sub">Shape of the room</div>
+            <div class="fact">Top 10 picks take <b>${Math.round(th.top10 * 100)}%</b> of the money, top 20 take <b>${Math.round(th.top20 * 100)}%</b>.</div>
+            <div class="fact">Only <b>${th.b30}</b> players a year land in $30–49 — a thin middle. ${th.b50} go $50+, ${th.b1} go for $1.</div>
+            <div class="fact"><b>$1 bargains:</b> ${Math.round(hits.QB.top24 * 100)}% of $1 QBs and ${Math.round(hits.TE.top24 * 100)}% of $1 TEs finished top-24; $1 RB/WR just ${Math.round(hits.RB.top24 * 100)}–${Math.round(hits.WR.top24 * 100)}%.</div>
+            <div class="fact"><b>$30+ busts:</b> RB ${Math.round(T.bust.RB.rate * 100)}%, WR ${Math.round(T.bust.WR.rate * 100)}% finished outside the top 24.</div></div>
+        </div>
+        <div class="sub" style="margin-top:10px">Who bids on what · tilt vs league share</div>
+        <div class="owners">${owners}</div>
+      </div>`;
+  }
+
+  function ladderHint(pos) {
+    if (!T || !T.ladder[pos] || pos === 'ALL') return '';
+    const l = T.ladder[pos];
+    return `<div class="hint">In this league ${pos}${[1, 3, 5, 8, 12].filter((n) => l[n] != null)
+      .map((n) => ` #${n} ≈ <b>$${l[n]}</b>`).join(' ·')}</div>`;
+  }
+
   function renderBoard() {
     if (!R) { $('board').innerHTML = '<div class="empty">waiting for the board…</div>'; return; }
     let rows;
@@ -120,7 +164,7 @@
         <td class="bid wide${p.bidders <= 2 ? ' few' : ''}">${p.bidders}</td>
       </tr>`;
     }).join('');
-    $('board').innerHTML = `<table>
+    $('board').innerHTML = (byPosView ? ladderHint(tab) : '') + `<table>
       <thead><tr><th class="l">#</th><th class="l">Player</th><th class="wide">Proj</th>
         <th>Model</th><th>Mkt</th><th>Edge</th><th class="wide">Bidders</th></tr></thead>
       <tbody>${body}</tbody></table>`;
@@ -141,7 +185,7 @@
 
   function render() {
     R = state ? M.compute(POOL, state, me) : null;
-    renderMeSelect(); renderCockpit(); renderTargets(); renderBoard(); renderRecent();
+    renderMeSelect(); renderCockpit(); renderTargets(); renderTrends(); renderBoard(); renderRecent();
   }
 
   // sticky offsets: measure the real header + tabs heights (the top bar wraps

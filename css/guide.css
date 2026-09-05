@@ -103,3 +103,30 @@ td.bid.few { color:var(--green); font-weight:800; }
 .how h3 { font-family:var(--display); font-size:15px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink); margin-bottom:6px; }
 .how p { margin-bottom:8px; } .how b { color:var(--ink); }
 .empty { padding:24px; text-align:center; color:var(--faint); }
+
+/* ---------------- league tendencies ---------------- */
+.trends { padding:8px 12px 0; }
+.tgrid3 { display:grid; grid-template-columns:1fr; gap:14px; }
+@media (min-width:760px) { .tgrid3 { grid-template-columns:1.1fr 1.2fr 1.2fr; } }
+.sub { font-size:9px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; color:var(--faint); margin-bottom:6px; }
+.sh { display:grid; grid-template-columns:34px 1fr 40px 90px; align-items:center; gap:8px; padding:3px 0; font-size:12px; }
+.sh .sp { font-weight:800; letter-spacing:.08em; font-size:10px; }
+.sh .bar { height:8px; background:rgba(255,255,255,.06); border-radius:2px; overflow:hidden; }
+.sh .bar i { display:block; height:100%; background:var(--soft); border-radius:2px; }
+.sh .bar i.pos-QB{background:var(--p-qb)} .sh .bar i.pos-RB{background:var(--p-rb)} .sh .bar i.pos-WR{background:var(--p-wr)} .sh .bar i.pos-TE{background:var(--p-te)} .sh .bar i.pos-K{background:var(--p-k)} .sh .bar i.pos-DST{background:var(--p-dst)}
+.sh b { font-family:var(--display); font-size:15px; text-align:right; }
+.sh small { color:var(--faint); font-size:10px; }
+table.ladder { width:100%; background:transparent; border:none; }
+table.ladder th, table.ladder td { position:static; padding:3px 4px; font-size:12px; background:transparent; border-bottom:1px solid rgba(36,48,74,.5); }
+table.ladder th { font-size:9px; }
+table.ladder td { font-family:var(--display); font-weight:700; color:var(--gold); }
+table.ladder td.l b { font-family:var(--data); font-size:10px; letter-spacing:.08em; }
+.fact { font-size:12px; color:var(--soft); line-height:1.4; padding:3px 0; }
+.fact b { color:var(--ink); }
+.owners { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:6px; }
+.ow { background:rgba(255,255,255,.03); border:1px solid var(--line); border-radius:3px; padding:6px 8px; font-size:12px; display:flex; flex-direction:column; gap:2px; }
+.ow b { font-family:var(--display); font-size:14px; text-transform:uppercase; }
+.ow span { font-weight:800; font-size:11px; }
+.ow small { color:var(--faint); font-size:10px; }
+.hint { font-size:11.5px; color:var(--soft); padding:2px 2px 8px; }
+.hint b { color:var(--gold); font-family:var(--display); font-size:13px; }
