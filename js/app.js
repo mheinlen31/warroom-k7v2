@@ -104,7 +104,7 @@
     const owners = T.owners.slice().sort((a, b) => Math.abs(b.tilt[b.lean]) - Math.abs(a.tilt[a.lean])).map((o) => {
       const v = o.tilt[o.lean];
       return `<div class="ow"><b>${esc(o.owner)}</b><span class="${v > 0 ? 'pos-edge' : 'neg-edge'}">${v > 0 ? 'chases' : 'avoids'} ${o.lean} ${v > 0 ? '+' : ''}${v}%</span>
-        <small>${o.big} picks of $50+ · avg $${o.avg}</small></div>`;
+        <small>${o.big} pick${o.big === 1 ? '' : 's'} of $50+ · avg $${o.avg}</small></div>`;
     }).join('');
     $('trends').innerHTML = `
       <div class="card">
@@ -116,7 +116,7 @@
             <div class="fact"><b>K / D/ST:</b> ${Math.round(k.K.one * 100)}% and ${Math.round(k['D/ST'].one * 100)}% went for $1; ${k.K.threePlus + k['D/ST'].threePlus} of ${k.K.n + k['D/ST'].n} ever hit $3.</div></div>
           <div><div class="sub">Shape of the room</div>
             <div class="fact">Top 10 picks take <b>${Math.round(th.top10 * 100)}%</b> of the money, top 20 take <b>${Math.round(th.top20 * 100)}%</b>.</div>
-            <div class="fact">Only <b>${th.b30}</b> players a year land in $30–49 — a thin middle. ${th.b50} go $50+, ${th.b1} go for $1.</div>
+            <div class="fact">Only about <b>${Math.round(th.b30)}</b> players a year land in $30–49 — a thin middle. About ${Math.round(th.b50)} go $50+ and ${Math.round(th.b1)} go for $1.</div>
             <div class="fact"><b>$1 bargains:</b> ${Math.round(hits.QB.top24 * 100)}% of $1 QBs and ${Math.round(hits.TE.top24 * 100)}% of $1 TEs finished top-24; $1 RB/WR just ${Math.round(hits.RB.top24 * 100)}–${Math.round(hits.WR.top24 * 100)}%.</div>
             <div class="fact"><b>$30+ busts:</b> RB ${Math.round(T.bust.RB.rate * 100)}%, WR ${Math.round(T.bust.WR.rate * 100)}% finished outside the top 24.</div></div>
         </div>
