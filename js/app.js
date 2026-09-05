@@ -15,7 +15,7 @@
   let q = '';
   let dmode = localStorage.getItem('sfg-dmode') || 'order';   // drafted view: order | pos | team
   const SORTS = ['rank', 'model', 'edge', 'you'];   // composite rank is the default view
-  let sortMode = SORTS.includes(localStorage.getItem('sfg-sort')) ? localStorage.getItem('sfg-sort') : 'rank';
+  let sortMode = SORTS.includes(localStorage.getItem('sfg-sort2')) ? localStorage.getItem('sfg-sort2') : 'rank';
   let clock = null;                                            // who's on the clock, from the board
   let watch = new Set();                                       // your watch list (this device)
   try { watch = new Set(JSON.parse(localStorage.getItem('sfg-watch') || '[]')); } catch (e) {}
@@ -37,7 +37,7 @@
   $('q').addEventListener('input', () => { q = $('q').value.trim().toLowerCase(); renderBoard(); });
   $('sort-btn').addEventListener('click', () => {
     sortMode = SORTS[(SORTS.indexOf(sortMode) + 1) % SORTS.length];
-    try { localStorage.setItem('sfg-sort', sortMode); } catch (err) { /* private mode */ }
+    try { localStorage.setItem('sfg-sort2', sortMode); } catch (err) { /* private mode */ }
     renderBoard();
   });
   $('board').addEventListener('click', (e) => {
