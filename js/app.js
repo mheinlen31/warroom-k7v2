@@ -144,6 +144,17 @@
     renderMeSelect(); renderCockpit(); renderTargets(); renderBoard(); renderRecent();
   }
 
+  // sticky offsets: measure the real header + tabs heights (the top bar wraps
+  // on a phone) so the tabs and column header stack instead of overlapping
+  function measureSticky() {
+    const top = document.querySelector('.top'), tabs = $('tabs');
+    if (top) document.documentElement.style.setProperty('--topH', top.offsetHeight + 'px');
+    if (tabs) document.documentElement.style.setProperty('--tabsH', tabs.offsetHeight + 'px');
+  }
+  measureSticky();
+  window.addEventListener('resize', measureSticky);
+  window.addEventListener('load', measureSticky);
+
   const pill = $('live-pill');
   window.LiveDraft.subscribe((st) => { state = st; pill.className = 'pill live'; pill.textContent = 'Live'; render(); })
     .catch(() => { pill.className = 'pill off'; pill.textContent = 'Offline'; render(); });

@@ -15,12 +15,13 @@ b { font-weight:700; }
 
 .top { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 14px; background:var(--panel2); border-bottom:2px solid var(--red); position:sticky; top:0; z-index:20; }
 .brand { display:flex; align-items:center; gap:10px; }
-.brand b { font-family:var(--display); font-size:22px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; }
+.brand b { font-family:var(--display); font-size:22px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; white-space:nowrap; }
 .pill { font-size:9.5px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; padding:3px 8px; border-radius:999px; border:1px solid var(--line2); color:var(--soft); }
 .pill.live { color:#6ee7a8; border-color:rgba(110,231,168,.45); background:rgba(110,231,168,.1); }
 .pill.off  { color:#ffb35c; border-color:rgba(255,179,92,.45); background:rgba(255,179,92,.1); }
 .me-pick { font-size:11px; color:var(--soft); text-transform:uppercase; letter-spacing:.08em; display:flex; align-items:center; gap:6px; }
 .me-pick select { background:#0a1120; color:var(--ink); border:1px solid var(--line2); border-radius:3px; padding:5px 8px; font:600 13px var(--data); max-width:46vw; }
+@media (max-width:480px) { .me-pick > span { display:none; } .brand b { font-size:19px; } .brand { gap:7px; } }
 
 /* ---------------- cockpit: my seat / league / scarcity ---------------- */
 .cockpit { display:grid; grid-template-columns:1fr; gap:8px; padding:10px 12px 0; }
@@ -57,7 +58,7 @@ b { font-weight:700; }
 .tc .pr small { color:var(--faint); font-weight:600; margin-left:4px; }
 
 /* ---------------- tabs + search ---------------- */
-.tabs { display:flex; gap:4px; padding:10px 12px 0; overflow-x:auto; scrollbar-width:none; position:sticky; top:52px; background:var(--ground); z-index:15; }
+.tabs { display:flex; gap:4px; padding:10px 12px 8px; overflow-x:auto; scrollbar-width:none; position:sticky; top:var(--topH, 52px); background:var(--ground); z-index:15; }
 .tabs::-webkit-scrollbar{display:none}
 .tab { flex:0 0 auto; font-family:var(--display); font-size:15px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; padding:8px 14px; border:1px solid var(--line2); border-radius:3px; background:var(--panel); color:var(--soft); cursor:pointer; }
 .tab.on { background:var(--red); border-color:var(--red); color:#fff; }
@@ -67,8 +68,8 @@ b { font-weight:700; }
 
 /* ---------------- board table ---------------- */
 main { padding:8px 12px 0; }
-table { width:100%; border-collapse:collapse; background:var(--panel); border:1px solid var(--line); border-radius:4px; overflow:hidden; }
-th { font-size:9px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; color:var(--faint); text-align:right; padding:8px 8px; border-bottom:1px solid var(--line2); background:var(--panel2); position:sticky; top:96px; z-index:5; }
+table { width:100%; border-collapse:collapse; background:var(--panel); border:1px solid var(--line); border-radius:4px; }
+th { font-size:9px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; color:var(--faint); text-align:right; padding:8px 8px; border-bottom:1px solid var(--line2); background:var(--panel2); position:sticky; top:calc(var(--topH, 52px) + var(--tabsH, 44px)); z-index:5; }
 th.l, td.l { text-align:left; }
 td { padding:7px 8px; border-bottom:1px solid rgba(36,48,74,.55); text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
 tr.cliff td { border-bottom:2px solid var(--line2); }
