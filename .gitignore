@@ -1,3 +1,8 @@
 .DS_Store
 __pycache__/
 .claude/
+
+# outside ranking sources are paywalled/personal — never publish them
+sources/*.csv
+sources/*.xlsx
+sources/*.xlsm

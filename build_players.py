@@ -150,26 +150,56 @@ HDR = {
     "pos": ["position", "pos"],
     "rank": ["overall rank", "overall", "ecr", "rank", "rk", "#"],
     "posrank": ["position rank", "pos rank", "posrank", "prk"],
-    "proj": ["projected points", "fantasy points", "projection", "proj", "fpts", "points", "pts"],
-    "aav": ["auction value", "avg $", "auction", "aav", "value", "$"],
+    "proj": ["projected points", "fantasy points", "projection", "proj", "fpts", "fps", "points", "pts"],
+    "aav": ["auction value", "avg $", "auction", "auc$", "auc", "aav", "value", "$"],
+}
+# outside sources' spellings -> ESPN's
+SRC_ALIASES = {
+    "kenneth gainwell": "kenny gainwell", "dermarcus robinson": "demarcus robinson",
+    "braxton barrios": "braxton berrios", "laquan treadwell": "laquon treadwell",
 }
 POS_ALIAS = {"DST": "D/ST", "DEF": "D/ST", "D": "D/ST", "PK": "K"}
 
 
-def _rows(path):
-    """yield dict rows from a csv or xlsx, headers lower-cased"""
+def _grid(path):
+    """every row of the file as a list of cell strings"""
     if path.suffix.lower() == ".csv":
         import csv
         with open(path, newline="", encoding="utf-8-sig") as fh:
-            for r in csv.DictReader(fh):
-                yield {str(k or "").strip().lower(): (v or "").strip() for k, v in r.items()}
-    elif path.suffix.lower() in (".xlsx", ".xlsm"):
-        from openpyxl import load_workbook
-        ws = load_workbook(path, read_only=True, data_only=True).active
-        it = ws.iter_rows(values_only=True)
-        hdr = [str(h or "").strip().lower() for h in next(it)]
-        for row in it:
-            yield {hdr[i]: ("" if v is None else str(v).strip()) for i, v in enumerate(row) if i < len(hdr)}
+            return [[(c or "").strip() for c in r] for r in csv.reader(fh)]
+    from openpyxl import load_workbook
+    ws = load_workbook(path, read_only=True, data_only=True).active
+    return [["" if v is None else str(v).strip() for v in row] for row in ws.iter_rows(values_only=True)]
+
+
+def _tables(path):
+    """yield (positional, rows) for each table in the file.
+
+    A plain export is one table. A POSITIONAL GUIDE lays several tables side
+    by side -- one RK/Player/FPS/... block per position, separated by blank
+    columns (The Athletic's sheet is built this way). Each block becomes its
+    own table, flagged positional so its RK is read as the rank within the
+    position rather than an overall rank."""
+    grid = _grid(path)
+    if not grid:
+        return
+    hdr = [h.lower() for h in grid[0]]
+    blocks, cur = [], []
+    for i, h in enumerate(hdr):
+        if h == "":
+            if cur:
+                blocks.append(cur); cur = []
+        else:
+            cur.append(i)
+    if cur:
+        blocks.append(cur)
+    blocks = [bk for bk in blocks if any(hdr[i] in HDR["name"] for i in bk)]
+    positional = len(blocks) > 1
+    for cols in blocks:
+        rows = []
+        for row in grid[1:]:
+            rows.append({hdr[i]: (row[i] if i < len(row) else "") for i in cols})
+        yield positional, rows
 
 
 def _col(row, key):
@@ -194,90 +224,149 @@ def _clean_name(raw, pos):
     return n
 
 
+def _config():
+    """sources/sources.json (optional): per-file label, weight, and whether its
+    auction values are MARKET prices (blend into Mkt $) or a model's values
+    (keep out of Mkt $ -- they still feed Model $ through projections)."""
+    cfg = SOURCES / "sources.json"
+    if not cfg.exists():
+        return {}
+    try:
+        return json.loads(cfg.read_text())
+    except ValueError as e:
+        print(f"sources.json is not valid JSON ({e}); ignoring it")
+        return {}
+
+
 def read_sources():
-    """-> list of (source_name, {norm_name: {pos, rank, posrank, proj, aav}})"""
+    """-> list of {name, label, rows{norm_name: {pos, rank, posrank, proj, aav, raw}}, aav, weight}"""
     out = []
     if not SOURCES.exists():
         return out
+    cfg = _config()
     for path in sorted(SOURCES.iterdir()):
         if path.name.startswith(("_", ".")) or path.suffix.lower() not in (".csv", ".xlsx", ".xlsm"):
             continue
-        rows, bad = {}, 0
-        for r in _rows(path):
-            raw = _col(r, "name")
-            if not raw:
-                continue
-            pos_raw = (_col(r, "pos") or "").upper()
-            m = re.match(r"([A-Z/]+)(\d+)?", pos_raw)
-            pos = POS_ALIAS.get(m.group(1), m.group(1)) if m else None
-            posrank = _num(_col(r, "posrank")) or (float(m.group(2)) if m and m.group(2) else None)
-            name = _clean_name(raw, pos)
-            if not name:
-                bad += 1
-                continue
-            rows[norm(name)] = {"pos": pos, "rank": _num(_col(r, "rank")), "posrank": posrank,
-                                "proj": _num(_col(r, "proj")), "aav": _num(_col(r, "aav"))}
-        out.append((path.stem, rows))
-        print(f"source {path.name}: {len(rows)} rows" + (f", {bad} unreadable" if bad else ""))
+        c = cfg.get(path.stem, {})
+        label = c.get("label") or "".join(w[0] for w in path.stem.split() if w[0].isalnum())[:4].upper()
+        rows, bad, tables = {}, 0, 0
+        for positional, table in _tables(path):
+            tables += 1
+            for r in table:
+                raw = _col(r, "name")
+                if not raw:
+                    continue
+                pos_raw = (_col(r, "pos") or "").upper()
+                m = re.match(r"([A-Z/]+)(\d+)?", pos_raw)
+                pos = POS_ALIAS.get(m.group(1), m.group(1)) if m else None
+                rank = _num(_col(r, "rank"))
+                posrank = _num(_col(r, "posrank")) or (float(m.group(2)) if m and m.group(2) else None)
+                if positional and rank is not None and posrank is None:
+                    posrank, rank = rank, None       # per-position table: RK is the rank within the position
+                name = _clean_name(raw, pos)
+                if not name:
+                    bad += 1
+                    continue
+                key = norm(name); key = SRC_ALIASES.get(key, key)
+                rows[key] = {"pos": pos, "rank": rank, "posrank": posrank,
+                                    "proj": _num(_col(r, "proj")), "aav": _num(_col(r, "aav")), "raw": raw}
+        out.append({"name": path.stem, "label": label, "rows": rows,
+                    "aav": bool(c.get("aav", True)), "weight": float(c.get("weight", 1) or 1)})
+        print(f"source {path.name} [{label}]: {len(rows)} rows"
+              + (f" across {tables} position tables" if tables > 1 else "")
+              + (f", {bad} unreadable" if bad else ""))
     return out
 
 
+def _wmean(pairs):
+    w = sum(x[1] for x in pairs)
+    return sum(v * x for v, x in pairs) / w if w else 0
+
+
 def blend(players, sources):
-    """Fold outside sources into the ESPN pool. Consensus rank is the mean
-    overall rank across everything that has one; projection is the mean of
-    ESPN's and each source's (a rank-only source gets an implied projection:
-    ESPN's projection at that positional rank); auction value likewise."""
+    """Fold outside sources into the ESPN pool. Consensus rank is the weighted
+    mean overall rank across everything that has one; projection is the
+    weighted mean of ESPN's and each source's (a rank-only source gets an
+    implied projection: ESPN's projection at that positional rank); auction
+    value likewise, but only from sources flagged as market prices."""
     for p in players:
         p["projEspn"] = p["proj"]
-        p["srcRanks"] = {}
+        p["srcRanks"], p["srcPos"], p["srcProj"] = {}, {}, {}
         p["nsrc"] = 1
     if not sources:
         return
     by_norm = {norm(p["name"]): p for p in players}
+    dst = {norm(p["name"]): p for p in players if p["pos"] == "D/ST"}
     curve = {}
     for pos in set(p["pos"] for p in players):
         curve[pos] = [p["proj"] for p in sorted((x for x in players if x["pos"] == pos),
                                                 key=lambda x: -x["proj"]) if p["proj"] > 0]
-    for sname, rows in sources:
-        by_pos = {}
+    for src in sources:
+        label, rows, w = src["label"], src["rows"], src["weight"]
+        matched, unmatched = [], []
         for k, r in rows.items():
-            if r["rank"] is not None and r["pos"]:
+            p = by_norm.get(k) or (dst.get(k.split()[-1]) if k else None)   # "Houston Texans" -> Texans
+            if not p:
+                unmatched.append(r["raw"])
+                continue
+            if not r["pos"]:
+                r["pos"] = p["pos"]            # a positional guide carries no POS column
+            matched.append((k, r, p))
+        by_pos = {}
+        for k, r, p in matched:
+            if r["rank"] is not None:
                 by_pos.setdefault(r["pos"], []).append((r["rank"], k))
         implied_prk = {}
         for pos, lst in by_pos.items():
             for i, (_, k) in enumerate(sorted(lst)):
                 implied_prk[k] = i + 1
-        unmatched = []
-        for k, r in rows.items():
-            p = by_norm.get(k)
-            if not p:
-                unmatched.append(k)
-                continue
-            projs = p.setdefault("_projs", [p["projEspn"]] if p["projEspn"] > 0 else [])
-            aavs = p.setdefault("_aavs", [p["aav"]] if p["aav"] > 0 else [])
-            ranks = p.setdefault("_ranks", ([p["cons"]] if p.get("cons") else []))
+        # Put the source's projections on ESPN's scale, position by position:
+        # a 6-point passing TD or a different yardage rate shifts a whole
+        # position, and we want the source's ORDER and GAPS, not its scoring
+        # settings. Ratio of summed projections over the players both have.
+        scale = {}
+        for pos in set(r["pos"] for _, r, _ in matched):
+            both = [(p["projEspn"], r["proj"]) for _, r, p in matched
+                    if r["pos"] == pos and r["proj"] and r["proj"] > 0 and p["projEspn"] > 0]
+            both.sort(key=lambda t: -t[0])
+            both = both[:24]
+            if len(both) >= 5:
+                scale[pos] = min(1.3, max(0.7, sum(e for e, _ in both) / sum(s for _, s in both)))
+        if scale:
+            print(f"  {label} projection scale to ESPN: " + " ".join(f"{k} {v:.2f}" for k, v in sorted(scale.items())))
+        for k, r, p in matched:
+            if r["proj"] and r["proj"] > 0 and r["pos"] in scale:
+                r["proj"] = r["proj"] * scale[r["pos"]]
+            projs = p.setdefault("_projs", [(p["projEspn"], 1.0)] if p["projEspn"] > 0 else [])
+            aavs = p.setdefault("_aavs", [(p["aav"], 1.0)] if p["aav"] > 0 else [])
+            ranks = p.setdefault("_ranks", ([(p["cons"], 1.0)] if p.get("cons") else []))
+            used = False
             if r["rank"] is not None:
-                ranks.append(r["rank"]); p["srcRanks"][sname] = r["rank"]
+                ranks.append((r["rank"], w)); p["srcRanks"][label] = r["rank"]; used = True
+            prk = r["posrank"] or implied_prk.get(k)
+            if prk:
+                p["srcPos"][label] = int(prk); used = True
             if r["proj"] is not None and r["proj"] > 0:
-                projs.append(r["proj"])
-            else:
-                prk = r["posrank"] or implied_prk.get(k)
+                projs.append((r["proj"], w)); p["srcProj"][label] = round(r["proj"], 1); used = True
+            elif prk:
                 cv = curve.get(p["pos"], [])
-                if prk and 1 <= int(prk) <= len(cv):
-                    projs.append(cv[int(prk) - 1])
-            if r["aav"] is not None and r["aav"] > 0:
-                aavs.append(r["aav"])
-        if unmatched:
-            print(f"  {sname}: {len(unmatched)} names not in the ESPN pool, e.g. {unmatched[:6]}")
+                if 1 <= int(prk) <= len(cv):
+                    projs.append((cv[int(prk) - 1], w)); used = True
+            if src["aav"] and r["aav"] is not None and r["aav"] > 0:
+                aavs.append((r["aav"], w)); used = True
+            if used:
+                p["_nsrc"] = p.get("_nsrc", 0) + 1
+        print(f"  {label}: matched {len(matched)} of {len(rows)}"
+              + (f"; not in the ESPN pool: {', '.join(unmatched[:20])}{' …' if len(unmatched) > 20 else ''}" if unmatched else ""))
     for p in players:
-        if p.get("_projs"):
-            p["proj"] = round(sum(p["_projs"]) / len(p["_projs"]), 1)
-        if p.get("_aavs"):
-            p["aav"] = round(sum(p["_aavs"]) / len(p["_aavs"]), 1)
-        if p.get("_ranks"):
-            p["cons"] = round(sum(p["_ranks"]) / len(p["_ranks"]), 1)
-            p["spread"] = round(max(p["_ranks"]) - min(p["_ranks"]))
-        p["nsrc"] = 1 + len(p.get("srcRanks", {}))
+        if len(p.get("_projs", [])) > 1:
+            p["proj"] = round(_wmean(p["_projs"]), 1)
+        if len(p.get("_aavs", [])) > 1:
+            p["aav"] = round(_wmean(p["_aavs"]), 1)
+        if len(p.get("_ranks", [])) > 1:
+            p["cons"] = round(_wmean(p["_ranks"]), 1)
+            p["spread"] = round(max(v for v, _ in p["_ranks"]) - min(v for v, _ in p["_ranks"]))
+        p["nsrc"] = 1 + p.pop("_nsrc", 0)
         for k in ("_projs", "_aavs", "_ranks"):
             p.pop(k, None)
     print(f"blended {len(sources)} outside source(s) into the pool")

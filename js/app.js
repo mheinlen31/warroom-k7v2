@@ -55,6 +55,9 @@
   });
 
   const money = (n) => '$' + Math.round(n);
+  // outside sources: their positional rank (and projection) for this player
+  const srcChips = (p) => Object.entries(p.srcPos || {}).map(([l, r]) =>
+    `<span class="src" title="${esc(l)}: ${esc(p.pos)}${r}${p.srcProj && p.srcProj[l] ? ` · ${p.srcProj[l]} pts` : ''}">${esc(l)} ${esc(p.pos.replace('/', ''))}${r}${p.srcProj && p.srcProj[l] ? ` · ${Math.round(p.srcProj[l])}` : ''}</span>`).join('');
   const edgeHtml = (e) => e > 0 ? `<span class="pos-edge">+$${e}</span>`
     : e < 0 ? `<span class="neg-edge">−$${Math.abs(e)}</span>` : '<span class="zero-edge">—</span>';
   /* last season, in the stats that score for the position; ESPN default PPR */
@@ -345,12 +348,13 @@
         head = `<tr class="tier-head"><td colspan="9">Tier ${p.tier}</td></tr>`;
       }
       const cons = p.cons ? `cons ${p.cons}${p.spread > 8 ? ` <span title="rankers disagree">±${p.spread}</span>` : ''}${p.nsrc > 1 ? ` · ${p.nsrc} src` : ''}` : '';
+      const srcs = srcChips(p);
       return head + `<tr class="${p.cliff && byPosView ? 'cliff' : ''}${watch.has(p.name) ? ' watched' : ''}" data-n="${esc(p.name)}">
         <td class="w"><button type="button" class="star${watch.has(p.name) ? ' on' : ''}" data-w="${esc(p.name)}" title="Watch list">★</button></td>
         <td class="rk">${byPosView ? p.posRank : i + 1}</td>
         <td class="pl"><div class="nm">${esc(p.name)}</div>
           <div class="meta"><span class="pos ${posClass(p.pos)}">${esc(p.pos)}${byPosView ? '' : p.posRank}</span>
-            ${p.nfl ? `<span>${esc(p.nfl)}</span>` : ''}${byeTag(p)}${yearTag(p)}${injHtml(p)}${cons ? `<span>${cons}</span>` : ''}</div>
+            ${p.nfl ? `<span>${esc(p.nfl)}</span>` : ''}${byeTag(p)}${yearTag(p)}${injHtml(p)}${cons ? `<span>${cons}</span>` : ''}${srcs}</div>
           <div class="meta2">${statLine(p)}</div></td>
         <td class="proj wide">${p.proj ? p.proj.toFixed(0) : '—'}</td>
         <td class="model">${money(p.model)}</td>
@@ -430,7 +434,7 @@
         <div>
           <div class="oc-eyebrow"><span class="dot"></span>On the clock${watch.has(p.name) ? ' <i class="wflag">★ on your watch list</i>' : ''}</div>
           <div class="oc-name">${esc(p.name)}</div>
-          <div class="oc-sub"><span class="pos ${posClass(p.pos)}">${esc(p.pos)}${p.posRank}</span>${p.nfl ? ' · ' + esc(p.nfl) : ''}${p.bye ? ` · bye ${p.bye}` : ''}${p.rookie ? ' · rookie' : p.soph ? ' · 2nd year' : ''} · proj ${p.proj.toFixed(0)} · tier ${p.tier}${p.cliff ? ' · cliff after him' : ''}${p.cons ? ` · cons ${p.cons}${p.nsrc > 1 ? ` (${p.nsrc} src)` : ''}` : ''}${injHtml(p) ? ' · ' + injHtml(p) : ''}</div>
+          <div class="oc-sub"><span class="pos ${posClass(p.pos)}">${esc(p.pos)}${p.posRank}</span>${p.nfl ? ' · ' + esc(p.nfl) : ''}${p.bye ? ` · bye ${p.bye}` : ''}${p.rookie ? ' · rookie' : p.soph ? ' · 2nd year' : ''} · proj ${p.proj.toFixed(0)} · tier ${p.tier}${p.cliff ? ' · cliff after him' : ''}${p.cons ? ` · cons ${p.cons}${p.nsrc > 1 ? ` (${p.nsrc} src)` : ''}` : ''}${Object.entries(p.srcPos || {}).map(([l, r]) => ` · ${esc(l)} ${esc(p.pos.replace('/', ''))}${r}${p.srcProj && p.srcProj[l] ? ` (${Math.round(p.srcProj[l])} pts)` : ''}`).join('')}${injHtml(p) ? ' · ' + injHtml(p) : ''}</div>
         <div class="oc-sub oc-last">${statLine(p)}</div>
         </div>
         <div class="oc-bid"><span>current bid</span><b>${bid ? '$' + bid : '—'}</b></div>

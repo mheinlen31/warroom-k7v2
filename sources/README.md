@@ -22,3 +22,23 @@ How it blends:
 - Auction value = mean across sources that give one (ESPN always does).
 Names like "Josh Allen (BUF)" or "Baltimore Ravens" are handled. Unmatched
 names are listed when prep.sh runs. Spread shows how far sources disagree.
+
+## Positional guides (side-by-side tables)
+
+A sheet that lays one table per position across the page -- RK, Player, TM,
+BYE, FPS, AUC$, a blank column, then the next position -- is read as one table
+per block. RK in such a block is the rank WITHIN the position (there is no
+overall rank), FPS is the projection, and team names ("Houston Texans") match
+the D/ST pool. The Athletic's positional guide is built this way.
+
+## sources.json (optional)
+
+Per-file settings, keyed by the file name without its extension:
+
+    { "The Athletic Positional Guide": { "label": "ATH", "aav": false, "weight": 1 } }
+
+- `label`: short tag shown on player rows (default: the file name's initials).
+- `aav`: `false` keeps the file's auction values OUT of Mkt $ -- use it for a
+  model's values (The Athletic, a projection system); leave it `true` for real
+  market averages (ESPN, FantasyPros AAV). Its projections still feed Model $.
+- `weight`: relative weight against ESPN (1) in the blended rank/projection.
