@@ -187,7 +187,13 @@
       <h4>Your roster · ${st ? st.filled : 0}/15${st && st.tax ? ` · tax $${st.tax}` : ''}</h4>
       <div class="rgrid">${slotsHtml}</div>
     </div>`;
-    box.innerHTML = plan + drainCard + roster;
+    // ---- room budgets: who's flush, who's spent ----
+    const budgets = `<div class="card">
+      <h4>Room budgets · richest first</h4>
+      <table class="rb">${R.teams.slice().sort((a, b) => b.remaining - a.remaining).map((t) => `
+        <tr class="${t.name === me ? 'me' : ''}"><td class="tn">${esc(t.name)}</td><td class="tl">$${t.remaining}</td><td class="tm">max $${t.maxBid}</td><td class="to">${t.open} open</td></tr>`).join('')}</table>
+    </div>`;
+    box.innerHTML = plan + drainCard + roster + budgets;
   }
 
   function renderTargets() {
@@ -326,7 +332,7 @@
         lastTier = p.tier;
         head = `<tr class="tier-head"><td colspan="9">Tier ${p.tier}</td></tr>`;
       }
-      const cons = p.cons ? `cons ${p.cons}${p.spread > 8 ? ` <span title="rankers disagree">±${p.spread}</span>` : ''}` : '';
+      const cons = p.cons ? `cons ${p.cons}${p.spread > 8 ? ` <span title="rankers disagree">±${p.spread}</span>` : ''}${p.nsrc > 1 ? ` · ${p.nsrc} src` : ''}` : '';
       return head + `<tr class="${p.cliff && byPosView ? 'cliff' : ''}${watch.has(p.name) ? ' watched' : ''}" data-n="${esc(p.name)}">
         <td class="w"><button type="button" class="star${watch.has(p.name) ? ' on' : ''}" data-w="${esc(p.name)}" title="Watch list">★</button></td>
         <td class="rk">${byPosView ? p.posRank : i + 1}</td>
@@ -356,10 +362,22 @@
   /* ON THE CLOCK. The board publishes the nomination and the bid as it climbs;
      this is the moment the whole page exists for. Everything the model knows
      about the player, compressed to one decision line. */
+  let lastClockName = null;
   function renderClock() {
     const box = $('onclock');
+    const mini = $('oc-mini');
+    // a new name on the clock: retitle the tab, buzz the phone if he's on your list
+    const nm = clock && clock.name ? clock.name : null;
+    if (nm !== lastClockName) {
+      lastClockName = nm;
+      document.title = nm ? `⏱ ${nm}${clock.bid ? ' $' + clock.bid : ''} · War Room` : 'War Room';
+      if (nm && watch.has(nm)) { try { navigator.vibrate && navigator.vibrate([120, 60, 120]); } catch (e) {} }
+    } else if (nm) {
+      document.title = `⏱ ${nm}${clock.bid ? ' $' + clock.bid : ''} · War Room`;
+    }
+    if (!nm) { mini.hidden = true; mini.innerHTML = ''; }
     document.querySelectorAll('#board tr.onclock').forEach((r) => r.classList.remove('onclock'));
-    if (!clock || !clock.name) { box.hidden = true; box.innerHTML = ''; return; }
+    if (!nm) { box.hidden = true; box.innerHTML = ''; return; }
     box.hidden = false;
     const bid = +clock.bid || 0;
     const norm = E.normName;
@@ -395,7 +413,7 @@
         <div>
           <div class="oc-eyebrow"><span class="dot"></span>On the clock${watch.has(p.name) ? ' <i class="wflag">★ on your watch list</i>' : ''}</div>
           <div class="oc-name">${esc(p.name)}</div>
-          <div class="oc-sub"><span class="pos ${posClass(p.pos)}">${esc(p.pos)}${p.posRank}</span>${p.nfl ? ' · ' + esc(p.nfl) : ''} · proj ${p.proj.toFixed(0)} · tier ${p.tier}${p.cliff ? ' · cliff after him' : ''}${injHtml(p) ? ' · ' + injHtml(p) : ''}</div>
+          <div class="oc-sub"><span class="pos ${posClass(p.pos)}">${esc(p.pos)}${p.posRank}</span>${p.nfl ? ' · ' + esc(p.nfl) : ''} · proj ${p.proj.toFixed(0)} · tier ${p.tier}${p.cliff ? ' · cliff after him' : ''}${p.cons ? ` · cons ${p.cons}${p.nsrc > 1 ? ` (${p.nsrc} src)` : ''}` : ''}${injHtml(p) ? ' · ' + injHtml(p) : ''}</div>
         </div>
         <div class="oc-bid"><span>current bid</span><b>${bid ? '$' + bid : '—'}</b></div>
       </div>
@@ -413,7 +431,20 @@
         <span><b>Next best:</b> ${alts.length ? alts.map((x) => `${esc(x.name)} $${x.model}`).join(' · ') : 'nobody worth paying for'}</span>
       </div>
     </div>`;
+    mini.className = 'oc-mini ' + cls;
+    mini.innerHTML = `<span class="mn">${esc(p.name)}</span><span class="mb">${bid ? '$' + bid : '—'}</span>
+      <span class="mv">worth <b>$${p.model}</b> · you <b>$${myMax}</b> · ${raisers.length} can raise</span>`;
+    mini.hidden = !miniWanted;
   }
+  // the mini strip shows only while the big panel is scrolled out of view
+  let miniWanted = false;
+  if ('IntersectionObserver' in window) {
+    new IntersectionObserver((ents) => {
+      miniWanted = !ents[0].isIntersecting;
+      const mini = $('oc-mini'); if (clock && clock.name && mini.innerHTML) mini.hidden = !miniWanted;
+    }, { threshold: 0.05 }).observe($('onclock'));
+  }
+  $('oc-mini').addEventListener('click', () => { document.documentElement.style.scrollBehavior = 'smooth'; window.scrollTo(0, 0); });
 
   function renderMeSelect() {
     const names = (state && state.teams || []).map((t) => t.name);
