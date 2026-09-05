@@ -57,6 +57,24 @@ def fetch_bye_weeks():
     return {t["abbrev"]: t.get("byeWeek") for t in teams if t.get("id") and t.get("byeWeek")}
 
 
+# ------------------------------------------------------------ league scoring
+# ESPN's leaguedefaults/3 totals are standard PPR: 4 points a passing TD.
+# Sunday Funday pays 6. Every other stat matches the default as far as we
+# know -- list any further difference here as ESPN stat id -> extra points
+# per unit versus the default, and both projections and last season's
+# actuals come out in the league's scoring.
+LEAGUE_SCORING_DELTA = {4: 2.0}      # passing TD: 6 instead of 4
+
+
+def league_total(s):
+    """a stats block's appliedTotal re-expressed in the league's scoring"""
+    total = float(s.get("appliedTotal") or 0)
+    raw = s.get("stats") or {}
+    for sid, extra in LEAGUE_SCORING_DELTA.items():
+        total += extra * float(raw.get(str(sid), 0) or 0)
+    return total
+
+
 # ------------------------------------------------------------ 2025 actuals
 # ESPN stat ids, checked against 2025 totals (Gibbs 1,223 rush yds = id 24 ...)
 STAT_IDS = {
@@ -81,7 +99,7 @@ def last_season(p, pos):
             out = {k: round(g(i)) for k, i in STAT_IDS.get(pos, {}).items()}
             if pos == "D/ST":
                 out["td"] = round(sum(g(i) for i in DST_TD_IDS))
-            return {"fp25": round(float(s.get("appliedTotal") or 0), 1), "gp25": round(g(210)), "s25": out}
+            return {"fp25": round(league_total(s), 1), "gp25": round(g(210)), "s25": out}
     return {"fp25": None, "gp25": None, "s25": None}
 
 
@@ -134,12 +152,12 @@ def experience_flags(rec):
 
 
 def projection(p):
-    """ESPN's projected season total: statSourceId 1 = projection,
-    statSplitTypeId 0 = full season."""
+    """ESPN's projected season total in the league's scoring: statSourceId 1 =
+    projection, statSplitTypeId 0 = full season."""
     for s in p.get("stats") or []:
         if (s.get("statSourceId") == 1 and s.get("statSplitTypeId") == 0
                 and s.get("seasonId") == SEASON):
-            return round(float(s.get("appliedTotal") or 0), 1)
+            return round(league_total(s), 1)
     return 0.0
 
 
@@ -152,6 +170,7 @@ HDR = {
     "posrank": ["position rank", "pos rank", "posrank", "prk"],
     "proj": ["projected points", "fantasy points", "projection", "proj", "fpts", "fps", "points", "pts"],
     "aav": ["auction value", "avg $", "auction", "auc$", "auc", "aav", "value", "$"],
+    "tier": ["tier"],
 }
 # outside sources' spellings -> ESPN's
 SRC_ALIASES = {
@@ -161,8 +180,88 @@ SRC_ALIASES = {
 POS_ALIAS = {"DST": "D/ST", "DEF": "D/ST", "D": "D/ST", "PK": "K"}
 
 
-def _grid(path):
+PDF_TITLES = {"QUARTERBACKS": "QB", "RUNNING BACKS": "RB", "WIDE RECEIVERS": "WR",
+              "TIGHT ENDS": "TE", "DEFENSES": "D/ST", "KICKERS": "K"}
+
+
+def _pdf_grid(path, pos_lookup=None):
+    """A tiers sheet printed to PDF (SB Nation's): one column per position,
+    "Tier N" markers, names listed in rank order, no numbers. pypdf's layout
+    mode keeps the columns as fixed-width text. Columns are found PER PAGE by
+    clustering where the tokens sit (page one has six columns under position
+    headers; once K and D/ST run out the later pages carry three, left-aligned).
+    A column with a header is that position; without one, the position is the
+    majority vote of the names in it against the ESPN pool. Order within a
+    column is the rank within the position; the last "Tier N" above a name is
+    its tier. Returns a grid: player / pos / pos rank / tier."""
+    from pypdf import PdfReader
+    pos_lookup = pos_lookup or {}
+    tier, count, seen = {}, {}, set()
+    grid = [["player", "pos", "pos rank", "tier"]]
+    token_re = re.compile(r"\S+(?: \S+)*")                      # words joined by single spaces
+    for page in PdfReader(path).pages:
+        lines = (page.extract_text(extraction_mode="layout") or "").splitlines()
+        toks = []                                                # (line_no, mid, text)
+        header = {}                                              # mid -> pos from a title line
+        for ln, line in enumerate(lines):
+            for m in token_re.finditer(line):
+                t, mid = m.group(0).strip(), (m.start() + m.end()) / 2
+                up = t.upper()
+                if up in PDF_TITLES:
+                    header[mid] = PDF_TITLES[up]
+                    continue
+                toks.append((ln, mid, t))
+        if not toks:
+            continue
+        # cluster token centres into columns: a gap of 12+ characters is a new column
+        mids = sorted(set(round(m) for _, m, _ in toks))
+        cols, cur = [], [mids[0]]
+        for a, b_ in zip(mids, mids[1:]):
+            if b_ - a > 12:
+                cols.append(cur); cur = []
+            cur.append(b_)
+        cols.append(cur)
+        centers = [sum(c) / len(c) for c in cols]
+        col_pos = {}
+        for ci, c in enumerate(centers):
+            hit = [p for hm, p in header.items() if abs(hm - c) <= 14]
+            if hit:
+                col_pos[ci] = hit[0]
+                continue
+            votes = {}
+            for _, mid, t in toks:
+                if abs(mid - c) <= 14:
+                    k = norm(t); p = pos_lookup.get(k) or pos_lookup.get(k.split()[-1] if k else "")
+                    if p:
+                        votes[p] = votes.get(p, 0) + 1
+            if votes:
+                col_pos[ci] = max(votes, key=votes.get)
+        for ln, mid, t in sorted(toks):
+            ci = min(range(len(centers)), key=lambda k: abs(centers[k] - mid))
+            pos = col_pos.get(ci)
+            if not pos or abs(centers[ci] - mid) > 14 or len(t) <= 2:
+                continue
+            low = t.lower()
+            mt = re.match(r"tier\s*(\d+)", low)
+            if mt:
+                tier[pos] = int(mt.group(1)); continue
+            if low.startswith("stream"):
+                tier[pos] = 1; continue
+            if re.match(r"^\d", t) or low in ("ppr",):
+                continue
+            key = (pos, norm(t))
+            if key in seen:
+                continue
+            seen.add(key)
+            count[pos] = count.get(pos, 0) + 1
+            grid.append([t, pos, str(count[pos]), str(tier.get(pos, ""))])
+    return grid
+
+
+def _grid(path, pos_lookup=None):
     """every row of the file as a list of cell strings"""
+    if path.suffix.lower() == ".pdf":
+        return _pdf_grid(path, pos_lookup)
     if path.suffix.lower() == ".csv":
         import csv
         with open(path, newline="", encoding="utf-8-sig") as fh:
@@ -172,7 +271,7 @@ def _grid(path):
     return [["" if v is None else str(v).strip() for v in row] for row in ws.iter_rows(values_only=True)]
 
 
-def _tables(path):
+def _tables(path, pos_lookup=None):
     """yield (positional, rows) for each table in the file.
 
     A plain export is one table. A POSITIONAL GUIDE lays several tables side
@@ -180,7 +279,7 @@ def _tables(path):
     columns (The Athletic's sheet is built this way). Each block becomes its
     own table, flagged positional so its RK is read as the rank within the
     position rather than an overall rank."""
-    grid = _grid(path)
+    grid = _grid(path, pos_lookup)
     if not grid:
         return
     hdr = [h.lower() for h in grid[0]]
@@ -238,19 +337,21 @@ def _config():
         return {}
 
 
-def read_sources():
-    """-> list of {name, label, rows{norm_name: {pos, rank, posrank, proj, aav, raw}}, aav, weight}"""
+def read_sources(pos_lookup=None):
+    """-> list of {name, label, rows{norm_name: {pos, rank, posrank, tier, proj, aav, raw}}, aav, weight}
+    pos_lookup (norm name -> pos from the ESPN pool) lets a PDF with unlabeled
+    columns work out which position each column is."""
     out = []
     if not SOURCES.exists():
         return out
     cfg = _config()
     for path in sorted(SOURCES.iterdir()):
-        if path.name.startswith(("_", ".")) or path.suffix.lower() not in (".csv", ".xlsx", ".xlsm"):
+        if path.name.startswith(("_", ".")) or path.suffix.lower() not in (".csv", ".xlsx", ".xlsm", ".pdf"):
             continue
         c = cfg.get(path.stem, {})
         label = c.get("label") or "".join(w[0] for w in path.stem.split() if w[0].isalnum())[:4].upper()
         rows, bad, tables = {}, 0, 0
-        for positional, table in _tables(path):
+        for positional, table in _tables(path, pos_lookup):
             tables += 1
             for r in table:
                 raw = _col(r, "name")
@@ -268,7 +369,7 @@ def read_sources():
                     bad += 1
                     continue
                 key = norm(name); key = SRC_ALIASES.get(key, key)
-                rows[key] = {"pos": pos, "rank": rank, "posrank": posrank,
+                rows[key] = {"pos": pos, "rank": rank, "posrank": posrank, "tier": _num(_col(r, "tier")),
                                     "proj": _num(_col(r, "proj")), "aav": _num(_col(r, "aav")), "raw": raw}
         out.append({"name": path.stem, "label": label, "rows": rows,
                     "aav": bool(c.get("aav", True)), "weight": float(c.get("weight", 1) or 1)})
@@ -289,11 +390,27 @@ def blend(players, sources):
     weighted mean of ESPN's and each source's (a rank-only source gets an
     implied projection: ESPN's projection at that positional rank); auction
     value likewise, but only from sources flagged as market prices."""
+    # ESPN's own positional rank (from its overall PPR rank) and, per position,
+    # the overall rank of the 1st, 2nd... player -- the ladder that puts a
+    # source's positional rank on an overall scale
+    espn_overall_at = {}
+    for pos in set(p["pos"] for p in players):
+        ranked = sorted((p for p in players if p["pos"] == pos and p.get("rank") and p["rank"] < 9000),
+                        key=lambda p: p["rank"])
+        espn_overall_at[pos] = [p["rank"] for p in ranked]
+        for i, p in enumerate(ranked):
+            p["espnPos"] = i + 1
     for p in players:
         p["projEspn"] = p["proj"]
-        p["srcRanks"], p["srcPos"], p["srcProj"] = {}, {}, {}
+        p["consEspn"] = p.get("cons")             # ESPN's own rankers' consensus, kept for reference
+        p["srcRanks"], p["srcPos"], p["srcProj"], p["srcTier"] = {}, {}, {}, {}
         p["nsrc"] = 1
+        p.setdefault("espnPos", None)
+        # composite starts from ESPN alone: positional rank and overall rank
+        p["_cpos"] = [(p["espnPos"], 1.0)] if p["espnPos"] else []
+        p["_crank"] = [(p["rank"], 1.0)] if p.get("rank") and p["rank"] < 9000 else []
     if not sources:
+        _finish_composite(players)
         return
     by_norm = {norm(p["name"]): p for p in players}
     dst = {norm(p["name"]): p for p in players if p["pos"] == "D/ST"}
@@ -346,6 +463,14 @@ def blend(players, sources):
             prk = r["posrank"] or implied_prk.get(k)
             if prk:
                 p["srcPos"][label] = int(prk); used = True
+                p["_cpos"].append((int(prk), w))
+                # the source's overall rank if it gave one, else ESPN's overall rank at that positional rank
+                ladder = espn_overall_at.get(p["pos"], [])
+                ov = r["rank"] if r["rank"] is not None else (ladder[int(prk) - 1] if 1 <= int(prk) <= len(ladder) else None)
+                if ov is not None:
+                    p["_crank"].append((ov, w))
+            if r.get("tier"):
+                p["srcTier"][label] = int(r["tier"]); used = True
             if r["proj"] is not None and r["proj"] > 0:
                 projs.append((r["proj"], w)); p["srcProj"][label] = round(r["proj"], 1); used = True
             elif prk:
@@ -363,13 +488,23 @@ def blend(players, sources):
             p["proj"] = round(_wmean(p["_projs"]), 1)
         if len(p.get("_aavs", [])) > 1:
             p["aav"] = round(_wmean(p["_aavs"]), 1)
-        if len(p.get("_ranks", [])) > 1:
-            p["cons"] = round(_wmean(p["_ranks"]), 1)
-            p["spread"] = round(max(v for v, _ in p["_ranks"]) - min(v for v, _ in p["_ranks"]))
         p["nsrc"] = 1 + p.pop("_nsrc", 0)
         for k in ("_projs", "_aavs", "_ranks"):
             p.pop(k, None)
+    _finish_composite(players)
     print(f"blended {len(sources)} outside source(s) into the pool")
+
+
+def _finish_composite(players):
+    """The composite is the default ranking on the board: `cpos` = weighted mean
+    positional rank across ESPN and every source that ranks the player, `cons`
+    = the same on an overall scale, `spread` = how far those overall ranks
+    disagree. Each source's own rank stays alongside as a note."""
+    for p in players:
+        cp, cr = p.pop("_cpos", []), p.pop("_crank", [])
+        p["cpos"] = round(_wmean(cp), 1) if cp else None
+        p["cons"] = round(_wmean(cr), 1) if cr else None
+        p["spread"] = round(max(v for v, _ in cr) - min(v for v, _ in cr)) if len(cr) > 1 else 0
 
 
 def main():
@@ -431,7 +566,7 @@ def main():
         rec["rookie"], rec["soph"] = rk, so
         rec.pop("id", None)
     print("rookies:", sum(1 for r in out if r["rookie"]), "| second-year:", sum(1 for r in out if r["soph"]))
-    blend(out, read_sources())
+    blend(out, read_sources({norm(p["name"]): p["pos"] for p in out}))
     out.sort(key=lambda x: (x["rank"], -x["aav"], x["name"]))
     payload = {"season": SEASON,
                "generated": datetime.now(timezone.utc).isoformat(timespec="seconds"),

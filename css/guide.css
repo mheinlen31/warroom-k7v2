@@ -244,3 +244,5 @@ table.rb .tneeds i.done { color:var(--faint); font-weight:600; letter-spacing:.0
 .fact.nom { margin-top:6px; color:var(--gold); } .fact.nom b { color:var(--gold); }
 
 .meta .src { color:var(--gold); font-weight:700; }
+
+.meta .src.espn { color:var(--soft); }

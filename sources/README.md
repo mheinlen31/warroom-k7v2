@@ -15,7 +15,11 @@ are detected by header name, case-insensitive; only PLAYER is required.
 | team        | team, tm, nfl  (optional, ignored for matching)    |
 
 How it blends:
-- Consensus rank = mean of overall rank across ESPN + every source that has it.
+- The board's default order is the COMPOSITE rank: the weighted mean of each
+  player's positional rank across ESPN and every source that ranks him (a
+  source's positional rank is put on an overall scale through ESPN's ladder for
+  the ALL tab). Each source's own rank sits beside the name as a note
+  ("ESPN RB1 · ATH RB3 · 353 · SBN RB2 · T1").
 - Projection = mean of ESPN's projection and each source's -- a source with
   ranks but no points gets an implied projection (the ESPN projection of the
   player at that positional rank), so rank-only sources still move Model $.
@@ -42,3 +46,19 @@ Per-file settings, keyed by the file name without its extension:
   model's values (The Athletic, a projection system); leave it `true` for real
   market averages (ESPN, FantasyPros AAV). Its projections still feed Model $.
 - `weight`: relative weight against ESPN (1) in the blended rank/projection.
+
+## Tiers sheets as PDF
+
+A tiers sheet printed to PDF (SB Nation's) -- one column per position, "Tier N"
+markers, names in order, no numbers -- is read too. Order within a column is the
+rank within the position and the tier is recorded; the rank becomes an implied
+projection (ESPN's projection at that positional rank). Rows show "SBN RB7 · T2".
+
+## League scoring
+
+ESPN's totals are standard PPR (4 points a passing TD); Sunday Funday pays 6.
+`LEAGUE_SCORING_DELTA` in build_players.py re-expresses ESPN's projections and
+last season's actuals in the league's scoring before anything is blended, so a
+source built on 6-point passing TDs (The Athletic) needs no rescaling and one
+built on 4 gets scaled up. Add any other difference there as stat id -> extra
+points per unit.

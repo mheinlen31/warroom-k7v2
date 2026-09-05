@@ -6,3 +6,4 @@ __pycache__/
 sources/*.csv
 sources/*.xlsx
 sources/*.xlsm
+sources/*.pdf

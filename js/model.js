@@ -215,6 +215,15 @@ window.GuideModel = (function () {
       if (at >= 0) untilMe = (((at - idx) % n) + n) % n;
     }
 
+    // ---- composite order within each position (the board's default) ----
+    // byPos stays in projection order for the maths; compRank is the unique
+    // 1..N position in the composite ranking (ESPN + every outside source),
+    // unranked players after the ranked ones by projection.
+    POSITIONS.forEach((pos) => {
+      byPos[pos].slice().sort((a, b) => ((a.cpos == null) - (b.cpos == null)) || (a.cpos - b.cpos) || (b.proj - a.proj))
+        .forEach((p, i) => { p.compRank = i + 1; });
+    });
+
     // ---- tiers and cliffs within each position ----
     POSITIONS.forEach((pos) => {
       const list = byPos[pos]; let tier = 1;

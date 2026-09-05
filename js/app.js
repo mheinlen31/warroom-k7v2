@@ -14,7 +14,8 @@
   if (!TABS.includes(tab)) tab = 'ALL';
   let q = '';
   let dmode = localStorage.getItem('sfg-dmode') || 'order';   // drafted view: order | pos | team
-  let sortMode = ['edge', 'you'].includes(localStorage.getItem('sfg-sort')) ? localStorage.getItem('sfg-sort') : 'model';   // ALL tab
+  const SORTS = ['rank', 'model', 'edge', 'you'];   // composite rank is the default view
+  let sortMode = SORTS.includes(localStorage.getItem('sfg-sort')) ? localStorage.getItem('sfg-sort') : 'rank';
   let clock = null;                                            // who's on the clock, from the board
   let watch = new Set();                                       // your watch list (this device)
   try { watch = new Set(JSON.parse(localStorage.getItem('sfg-watch') || '[]')); } catch (e) {}
@@ -35,7 +36,7 @@
   });
   $('q').addEventListener('input', () => { q = $('q').value.trim().toLowerCase(); renderBoard(); });
   $('sort-btn').addEventListener('click', () => {
-    sortMode = sortMode === 'model' ? 'edge' : sortMode === 'edge' ? 'you' : 'model';
+    sortMode = SORTS[(SORTS.indexOf(sortMode) + 1) % SORTS.length];
     try { localStorage.setItem('sfg-sort', sortMode); } catch (err) { /* private mode */ }
     renderBoard();
   });
@@ -55,9 +56,9 @@
   });
 
   const money = (n) => '$' + Math.round(n);
-  // outside sources: their positional rank (and projection) for this player
-  const srcChips = (p) => Object.entries(p.srcPos || {}).map(([l, r]) =>
-    `<span class="src" title="${esc(l)}: ${esc(p.pos)}${r}${p.srcProj && p.srcProj[l] ? ` · ${p.srcProj[l]} pts` : ''}">${esc(l)} ${esc(p.pos.replace('/', ''))}${r}${p.srcProj && p.srcProj[l] ? ` · ${Math.round(p.srcProj[l])}` : ''}</span>`).join('');
+  // what each source individually ranks this player: ESPN first, then the outside sources
+  const srcChips = (p) => (p.espnPos ? `<span class="src espn" title="ESPN: ${esc(p.pos)}${p.espnPos}, overall #${p.rank}">ESPN ${esc(p.pos.replace('/', ''))}${p.espnPos}</span>` : '') + Object.entries(p.srcPos || {}).map(([l, r]) =>
+    `<span class="src" title="${esc(l)}: ${esc(p.pos)}${r}${p.srcTier && p.srcTier[l] ? ` · tier ${p.srcTier[l]}` : ''}${p.srcProj && p.srcProj[l] ? ` · ${p.srcProj[l]} pts` : ''}">${esc(l)} ${esc(p.pos.replace('/', ''))}${r}${p.srcTier && p.srcTier[l] ? ` · T${p.srcTier[l]}` : ''}${p.srcProj && p.srcProj[l] ? ` · ${Math.round(p.srcProj[l])}` : ''}</span>`).join('');
   const edgeHtml = (e) => e > 0 ? `<span class="pos-edge">+$${e}</span>`
     : e < 0 ? `<span class="neg-edge">−$${Math.abs(e)}</span>` : '<span class="zero-edge">—</span>';
   /* last season, in the stats that score for the position; ESPN default PPR */
@@ -315,13 +316,14 @@
       rows = R.avail.filter((p) => p.proj > 0 || p.aav > 0);
       if (sortMode === 'you') rows = rows.filter((p) => p.payTo > 0).sort((a, b) => (b.payTo - b.mkt) - (a.payTo - a.mkt) || b.payTo - a.payTo);
       else if (sortMode === 'edge') rows.sort((a, b) => b.edge - a.edge || b.model - a.model);
-      else rows.sort((a, b) => b.model - a.model || b.proj - a.proj);
+      else if (sortMode === 'model') rows.sort((a, b) => b.model - a.model || b.proj - a.proj);
+      else rows.sort((a, b) => ((a.cons == null) - (b.cons == null)) || (a.cons - b.cons) || (b.model - a.model));   // composite rank
       rows = rows.slice(0, 160);
     } else if (tab === 'ROOKIES' || tab === '2ND YR') {
       const key = tab === 'ROOKIES' ? 'rookie' : 'soph';
       rows = R.avail.filter((p) => p[key] && (p.proj > 0 || p.aav > 0)).sort((a, b) => b.model - a.model || b.proj - a.proj);
-    } else if (R.byPos[tab]) {                       // a position tab; WATCH is handled below
-      rows = R.byPos[tab].filter((p) => p.proj > 0 || p.aav > 0);
+    } else if (R.byPos[tab]) {                       // a position tab, in composite order; WATCH is handled below
+      rows = R.byPos[tab].filter((p) => p.proj > 0 || p.aav > 0).sort((a, b) => a.compRank - b.compRank);
     }
     let soldHtml = '';
     if (tab === 'WATCH') {
@@ -337,23 +339,23 @@
     if (q) rows = R.avail.filter((p) => p.name.toLowerCase().includes(q)).sort((a, b) => b.model - a.model);
     if (tab !== 'WATCH') $('count').textContent = `${rows.length} available`;
     $('sort-btn').hidden = tab !== 'ALL' || !!q;
-    $('sort-btn').textContent = 'Sort: ' + (sortMode === 'edge' ? 'Edge' : sortMode === 'you' ? 'You' : 'Model');
+    $('sort-btn').textContent = 'Sort: ' + ({ rank: 'Rank', model: 'Model', edge: 'Edge', you: 'You' })[sortMode];
     if (!rows.length) { $('board').innerHTML = '<div class="empty">nobody matches</div>'; return; }
     const byPosView = tab !== 'ALL' && !q;
     let lastTier = 0;
     const body = rows.map((p, i) => {
       let head = '';
-      if (byPosView && p.tier !== lastTier) {
+      if (byPosView && p.tier > lastTier) {          // composite order can interleave tiers; head each once
         lastTier = p.tier;
         head = `<tr class="tier-head"><td colspan="9">Tier ${p.tier}</td></tr>`;
       }
-      const cons = p.cons ? `cons ${p.cons}${p.spread > 8 ? ` <span title="rankers disagree">±${p.spread}</span>` : ''}${p.nsrc > 1 ? ` · ${p.nsrc} src` : ''}` : '';
+      const cons = p.cons ? `rank ${p.cons}${p.spread > 8 ? ` <span title="sources disagree by ${p.spread} overall spots">±${p.spread}</span>` : ''} · ${p.nsrc} src` : '';
       const srcs = srcChips(p);
       return head + `<tr class="${p.cliff && byPosView ? 'cliff' : ''}${watch.has(p.name) ? ' watched' : ''}" data-n="${esc(p.name)}">
         <td class="w"><button type="button" class="star${watch.has(p.name) ? ' on' : ''}" data-w="${esc(p.name)}" title="Watch list">★</button></td>
-        <td class="rk">${byPosView ? p.posRank : i + 1}</td>
+        <td class="rk">${byPosView ? p.compRank : i + 1}</td>
         <td class="pl"><div class="nm">${esc(p.name)}</div>
-          <div class="meta"><span class="pos ${posClass(p.pos)}">${esc(p.pos)}${byPosView ? '' : p.posRank}</span>
+          <div class="meta"><span class="pos ${posClass(p.pos)}">${esc(p.pos)}${byPosView ? '' : p.compRank}</span>
             ${p.nfl ? `<span>${esc(p.nfl)}</span>` : ''}${byeTag(p)}${yearTag(p)}${injHtml(p)}${cons ? `<span>${cons}</span>` : ''}${srcs}</div>
           <div class="meta2">${statLine(p)}</div></td>
         <td class="proj wide">${p.proj ? p.proj.toFixed(0) : '—'}</td>
@@ -434,7 +436,7 @@
         <div>
           <div class="oc-eyebrow"><span class="dot"></span>On the clock${watch.has(p.name) ? ' <i class="wflag">★ on your watch list</i>' : ''}</div>
           <div class="oc-name">${esc(p.name)}</div>
-          <div class="oc-sub"><span class="pos ${posClass(p.pos)}">${esc(p.pos)}${p.posRank}</span>${p.nfl ? ' · ' + esc(p.nfl) : ''}${p.bye ? ` · bye ${p.bye}` : ''}${p.rookie ? ' · rookie' : p.soph ? ' · 2nd year' : ''} · proj ${p.proj.toFixed(0)} · tier ${p.tier}${p.cliff ? ' · cliff after him' : ''}${p.cons ? ` · cons ${p.cons}${p.nsrc > 1 ? ` (${p.nsrc} src)` : ''}` : ''}${Object.entries(p.srcPos || {}).map(([l, r]) => ` · ${esc(l)} ${esc(p.pos.replace('/', ''))}${r}${p.srcProj && p.srcProj[l] ? ` (${Math.round(p.srcProj[l])} pts)` : ''}`).join('')}${injHtml(p) ? ' · ' + injHtml(p) : ''}</div>
+          <div class="oc-sub"><span class="pos ${posClass(p.pos)}">${esc(p.pos)}${p.compRank || p.posRank}</span>${p.nfl ? ' · ' + esc(p.nfl) : ''}${p.bye ? ` · bye ${p.bye}` : ''}${p.rookie ? ' · rookie' : p.soph ? ' · 2nd year' : ''} · proj ${p.proj.toFixed(0)} · tier ${p.tier}${p.cliff ? ' · cliff after him' : ''}${p.cons ? ` · rank ${p.cons} (${p.nsrc} src)` : ''}${p.espnPos ? ` · ESPN ${esc(p.pos.replace('/', ''))}${p.espnPos}` : ''}${Object.entries(p.srcPos || {}).map(([l, r]) => ` · ${esc(l)} ${esc(p.pos.replace('/', ''))}${r}${p.srcTier && p.srcTier[l] ? ` T${p.srcTier[l]}` : ''}${p.srcProj && p.srcProj[l] ? ` (${Math.round(p.srcProj[l])} pts)` : ''}`).join('')}${injHtml(p) ? ' · ' + injHtml(p) : ''}</div>
         <div class="oc-sub oc-last">${statLine(p)}</div>
         </div>
         <div class="oc-bid"><span>current bid</span><b>${bid ? '$' + bid : '—'}</b></div>
