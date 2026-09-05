@@ -115,10 +115,18 @@
 
     // ---- plan ----
     const BENCH_EACH = 2;
-    const rows = me_.targets.map((t) => {
-      const pick = t.cands[1] || t.cands[0];
-      return { slot: t.slot, target: pick ? pick.model : 1, who: pick ? pick.name : '—' };
+    // one player can only fill one slot: dedicated slots claim first, FLEX
+    // takes what's left, and each slot budgets its second-best remaining value
+    const claimed = new Set();
+    const order = me_.targets.slice().sort((a, b) => (a.id === 'FLEX') - (b.id === 'FLEX'));
+    const planned = {};
+    order.forEach((t) => {
+      const free = t.cands.filter((c) => !claimed.has(c.name));
+      const pick = free[1] || free[0] || null;
+      if (pick) claimed.add(pick.name);
+      planned[t.id] = { slot: t.slot, target: pick ? pick.model : 1, who: pick ? pick.name : '—' };
     });
+    const rows = me_.targets.map((t) => planned[t.id]);
     const starters = rows.reduce((s, r) => s + r.target, 0);
     const bench = me_.benchOpen * BENCH_EACH;
     const total = starters + bench;
@@ -128,7 +136,7 @@
       <table class="plan">${rows.map((r) => `<tr><td class="ps ${posClass(r.slot)}">${esc(r.slot)}</td><td class="pw">${esc(r.who)}</td><td class="pt">$${r.target}</td></tr>`).join('')}
         ${me_.benchOpen ? `<tr><td class="ps">BE ×${me_.benchOpen}</td><td class="pw muted">bench at ~$${BENCH_EACH}</td><td class="pt">$${bench}</td></tr>` : ''}
         <tr class="tot"><td></td><td>planned</td><td class="pt">$${total}</td></tr>
-        <tr class="tot ${diff >= 0 ? 'ok' : 'bad'}"><td></td><td>${diff >= 0 ? 'cushion' : 'over by'}</td><td class="pt">${diff >= 0 ? '+' : '−'}$${Math.abs(diff)}</td></tr>
+        <tr class="tot ${diff >= 0 ? 'ok' : 'bad'}"><td></td><td>${diff >= 0 ? 'cushion' : 'over by'}</td><td class="pt">$${Math.abs(diff)}</td></tr>
       </table>
       <div class="fact">${diff >= 0 ? `Room to go $${diff} over on one target and still fill out.` : `Trim $${-diff}: drop a slot a tier, or take the bargains the room leaves.`}</div>
     </div>`;
