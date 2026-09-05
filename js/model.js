@@ -339,7 +339,8 @@ window.GuideModel = (function () {
       avail, byPos, repl, scarcity, me, recent, target, auctionSpentAt,
       league: { moneyLeft, openSpots, spendable, inflation, teams: ts.length,
                 picks: ((state && state.picks) || []).length },
-      teams: ts.map(({ t, st }) => ({ name: t.name, remaining: st.remaining, maxBid: st.maxBid, open: st.open })),
+      teams: ts.map(({ t, st }) => ({ name: t.name, remaining: st.remaining, maxBid: st.maxBid, open: st.open,
+        needs: E.SLOTS.filter((sl) => sl.takes && !st.slots[sl.id]).map((sl) => sl.label) })),
     };
   }
   return { compute, POSITIONS };

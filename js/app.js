@@ -155,13 +155,16 @@
     </div>`;
 
     // ---- drain ----
+    // the room will pay well past YOUR number: nominate them and let other people spend
     const wanted = new Set(me_.targets.flatMap((t) => t.cands.map((c) => c.name)));
-    const drain = R.avail.filter((p) => p.mkt >= 12 && !wanted.has(p.name) && (!meT || !E.canRoster(meT, p.pos).ok || p.edge < 0))
-      .sort((a, b) => (b.mkt - b.model) - (a.mkt - a.model)).slice(0, 6);
+    const yours = (p) => p.payTo == null ? p.model : p.payTo;
+    const gapOf = (p) => p.mkt - yours(p);
+    const drain = R.avail.filter((p) => p.mkt >= 10 && !wanted.has(p.name) && gapOf(p) >= 4 && p.bidders >= 2)
+      .sort((a, b) => gapOf(b) - gapOf(a)).slice(0, 6);
     const drainCard = `<div class="card">
-      <h4>Nominate to drain · the room overpays, you don't want them</h4>
+      <h4>Nominate to drain · the room pays more than you would</h4>
       ${drain.length ? drain.map((p) => `<div class="dr"><span class="nm">${esc(p.name)}</span><span class="pos ${posClass(p.pos)}">${esc(p.pos)}</span>
-        <span class="drv">room ~<b>$${p.mkt}</b> · worth $${p.model} · ${p.bidders} can pay</span></div>`).join('')
+        <span class="drv">room ~<b>$${p.mkt}</b> · you ${yours(p) ? '$' + yours(p) : '—'} · ${p.bidders} can pay</span></div>`).join('')
         : '<div class="fact">Nothing left worth draining.</div>'}
     </div>`;
 
@@ -174,9 +177,9 @@
     </div>`;
     // ---- room budgets: who's flush, who's spent ----
     const budgets = `<div class="card">
-      <h4>Room budgets · richest first</h4>
+      <h4>Room budgets · richest first · open starters</h4>
       <table class="rb">${R.teams.slice().sort((a, b) => b.remaining - a.remaining).map((t) => `
-        <tr class="${t.name === me ? 'me' : ''}"><td class="tn">${esc(t.name)}</td><td class="tl">$${t.remaining}</td><td class="tm">max $${t.maxBid}</td><td class="to">${t.open} open</td></tr>`).join('')}</table>
+        <tr class="${t.name === me ? 'me' : ''}"><td class="tn">${esc(t.name)}<div class="tneeds">${(t.needs || []).length ? t.needs.map((n) => `<i class="${posClass(n)}">${esc(n)}</i>`).join('') : '<i class="done">starters set</i>'}</div></td><td class="tl">$${t.remaining}</td><td class="tm">max $${t.maxBid}</td><td class="to">${t.open} open</td></tr>`).join('')}</table>
     </div>`;
     box.innerHTML = plan + drainCard + roster + budgets;
   }
