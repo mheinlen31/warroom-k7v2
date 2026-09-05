@@ -314,7 +314,7 @@
       if (!rows.length) { $('board').innerHTML = soldHtml || '<div class="empty">Tap ★ on any player to watch him here.</div>'; return; }
     }
     if (q) rows = R.avail.filter((p) => p.name.toLowerCase().includes(q)).sort((a, b) => b.model - a.model);
-    $('count').textContent = `${rows.length} available`;
+    if (tab !== 'WATCH') $('count').textContent = `${rows.length} available`;
     $('sort-btn').hidden = tab !== 'ALL' || !!q;
     $('sort-btn').textContent = 'Sort: ' + (sortMode === 'edge' ? 'Edge' : 'Model');
     if (!rows.length) { $('board').innerHTML = '<div class="empty">nobody matches</div>'; return; }
