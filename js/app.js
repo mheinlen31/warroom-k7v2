@@ -203,7 +203,28 @@
       <table class="rb">${R.teams.slice().sort((a, b) => b.remaining - a.remaining).map((t) => `
         <tr class="${t.name === me ? 'me' : ''}"><td class="tn">${esc(t.name)}<div class="tneeds">${(t.needs || []).length ? t.needs.map((n) => `<i class="${posClass(n)}">${esc(n)}</i>`).join('') : '<i class="done">starters set</i>'}</div></td><td class="tl">$${t.remaining}</td><td class="tm">max $${t.maxBid}</td><td class="to">${t.open} open</td></tr>`).join('')}</table>
     </div>`;
-    box.innerHTML = plan + nomCard + drainCard + flierCard + roster + budgets;
+    // ---- room rosters: who has what, at a glance ----
+    // one row per team, a count per position; amber = still short of a
+    // starter there (they'll be bidding), dim = at the position max (they can't)
+    const NEED = { QB: 1, RB: 2, WR: 2, TE: 1, K: 1, 'D/ST': 1 };
+    const POSL = ['QB', 'RB', 'WR', 'TE', 'K', 'D/ST'];
+    const rr = (state.teams || []).map((t) => {
+      const c = {}; POSL.forEach((p) => { c[p] = 0; });
+      (t.players || []).forEach((p) => { if (c[p.pos] != null) c[p.pos]++; });
+      const s = E.teamState(t);
+      return { name: t.name, c, filled: s.filled, open: s.open };
+    });
+    const rostersCard = `<div class="card wide2">
+      <h4>Room rosters · who has what</h4>
+      <table class="rr"><thead><tr><th class="l">team</th>${POSL.map((p) => `<th class="${posClass(p)}">${esc(p.replace('/', ''))}</th>`).join('')}<th>filled</th></tr></thead>
+      <tbody>${rr.map((r) => `<tr class="${r.name === me ? 'me' : ''}"><td class="tn">${esc(r.name)}</td>${POSL.map((p) => {
+          const n = r.c[p], need = NEED[p], max = (E.POS_MAX || {})[p] || 99;
+          const cls = n < need ? 'need' : n >= max ? 'full' : '';
+          const tip = `${n} ${p}${n < need ? ` · needs ${need - n} more starter${need - n > 1 ? 's' : ''}` : n >= max ? ' · at the max' : ''}`;
+          return `<td class="${cls}" title="${esc(tip)}">${n}</td>`; }).join('')}<td class="sp">${r.filled}<small>/15</small></td></tr>`).join('')}</tbody></table>
+      <div class="fact rr-key"><i class="need">n</i> short of a starter there · <i class="full">n</i> at the position max</div>
+    </div>`;
+    box.innerHTML = plan + nomCard + drainCard + flierCard + roster + budgets + rostersCard;
   }
 
   function renderTargets() {
