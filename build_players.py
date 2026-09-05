@@ -167,18 +167,26 @@ INJURY_URL = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/injurie
 WEEK1 = datetime(SEASON, 9, 13)          # first Sunday of the season
 STATUS_CODE = {"Questionable": "Q", "Doubtful": "D", "Out": "OUT", "Injured Reserve": "IR",
                "Suspension": "SUSP", "Physically Unable to Perform": "PUP"}
+FEED_CODE = {"QUESTIONABLE": "Q", "DOUBTFUL": "D", "OUT": "OUT", "INJURY_RESERVE": "IR",
+             "SUSPENSION": "SUSP", "DAY_TO_DAY": "DTD", "PROBABLE": None}
 
 
 def fetch_injury_report():
     """ESPN's league-wide injury/news report, one request: every player with a
     current status or a recent news blurb -> {status, type, note, date, return}.
     'Active' rows are news too (depth-chart notes, extensions) and are kept."""
-    try:
-        req = urllib.request.Request(INJURY_URL, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=60) as r:
-            data = json.load(r)
-    except Exception as e:                     # the report is a bonus, never a dependency
-        print(f"injury report unavailable ({e})")
+    data, err = None, None
+    # ESPN's site API refuses a bare "Mozilla/5.0" agent but takes urllib's default and curl's
+    for headers in ({}, {"User-Agent": "curl/8.7.1"}):
+        try:
+            req = urllib.request.Request(INJURY_URL, headers=headers)
+            with urllib.request.urlopen(req, timeout=60) as r:
+                data = json.load(r)
+            break
+        except Exception as e:                 # the report is a bonus, never a dependency
+            err = e
+    if data is None:
+        print(f"injury report unavailable ({err})")
         return {}
     out = {}
     for team in data.get("injuries", []):
@@ -241,8 +249,7 @@ def apply_news(players):
             g = games_from_return(rec["status"], rec["return"])
             if g is not None:
                 p["games"] = g
-        if p["inj"] == "QUESTIONABLE":
-            p["inj"] = "Q"
+        p["inj"] = FEED_CODE.get(p["inj"], p["inj"])   # the fantasy feed's raw codes, same vocabulary
         m = manual.get(k)
         if m:
             if m.get("games") is not None:
