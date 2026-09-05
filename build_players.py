@@ -5,7 +5,8 @@ consensus rank, injury flag and a short outlook blurb.
 
 Run:  python3 build_players.py     (prep.sh does this for you)
 """
-import json, re, unicodedata, urllib.request
+import json
+import math, re, unicodedata, urllib.request
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
@@ -159,6 +160,110 @@ def projection(p):
                 and s.get("seasonId") == SEASON):
             return round(league_total(s), 1)
     return 0.0
+
+
+# ------------------------------------------------------------ injury report + news
+INJURY_URL = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries"
+WEEK1 = datetime(SEASON, 9, 13)          # first Sunday of the season
+STATUS_CODE = {"Questionable": "Q", "Doubtful": "D", "Out": "OUT", "Injured Reserve": "IR",
+               "Suspension": "SUSP", "Physically Unable to Perform": "PUP"}
+
+
+def fetch_injury_report():
+    """ESPN's league-wide injury/news report, one request: every player with a
+    current status or a recent news blurb -> {status, type, note, date, return}.
+    'Active' rows are news too (depth-chart notes, extensions) and are kept."""
+    try:
+        req = urllib.request.Request(INJURY_URL, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=60) as r:
+            data = json.load(r)
+    except Exception as e:                     # the report is a bonus, never a dependency
+        print(f"injury report unavailable ({e})")
+        return {}
+    out = {}
+    for team in data.get("injuries", []):
+        for it in team.get("injuries", []):
+            nm = (it.get("athlete") or {}).get("displayName")
+            if not nm:
+                continue
+            det = it.get("details") or {}
+            note = re.sub(r"\s+", " ", it.get("shortComment") or it.get("longComment") or "").strip()
+            if len(note) > 220:
+                note = note[:217].rsplit(" ", 1)[0] + "…"
+            rec = {"status": it.get("status"), "type": det.get("type"), "note": note,
+                   "date": (it.get("date") or "")[:10], "return": (det.get("returnDate") or "")[:10]}
+            k = norm(nm)
+            if k not in out or (rec["date"] or "") > (out[k]["date"] or ""):
+                out[k] = rec
+    print(f"injury report: {len(out)} players")
+    return out
+
+
+def games_from_return(status, ret):
+    """Out / IR / suspension with a projected return date -> games he'll play.
+    Week 1 is the first Sunday; each week after it is a game missed."""
+    if status not in ("Out", "Injured Reserve", "Suspension", "Physically Unable to Perform") or not ret:
+        return None
+    try:
+        back = datetime.strptime(ret, "%Y-%m-%d")
+    except ValueError:
+        return None
+    missed = max(0, math.ceil((back - WEEK1).days / 7))
+    return max(0, min(17, 17 - missed))
+
+
+def apply_news(players):
+    """Attach the report to the pool, normalise the injury code, estimate games
+    from a return date, and apply sources/news.json (manual: games, note) on
+    top. A player with fewer than 17 games keeps his full-season projection in
+    projFull and has proj scaled to the games he'll play; the composite rank
+    is re-derived from that scaled projection so he drops where he belongs."""
+    report = fetch_injury_report()
+    manual = {}
+    cfg = SOURCES / "news.json"
+    if cfg.exists():
+        try:
+            manual = {norm(k): v for k, v in json.loads(cfg.read_text()).items()}
+        except ValueError as e:
+            print(f"news.json is not valid JSON ({e}); ignoring it")
+    hits = scaled = 0
+    for p in players:
+        k = norm(p["name"])
+        rec = report.get(k)
+        if rec:
+            hits += 1
+            p["news"] = rec
+            code = STATUS_CODE.get(rec["status"])
+            if code:
+                p["inj"] = code
+            elif rec["status"] == "Active":
+                p["inj"] = None                 # the report is fresher than the fantasy feed
+            g = games_from_return(rec["status"], rec["return"])
+            if g is not None:
+                p["games"] = g
+        if p["inj"] == "QUESTIONABLE":
+            p["inj"] = "Q"
+        m = manual.get(k)
+        if m:
+            if m.get("games") is not None:
+                p["games"] = max(0, min(17, int(m["games"])))
+            if m.get("note"):
+                p["newsNote"] = m["note"]
+        if p.get("games") is not None and p["games"] < 17 and p["proj"] > 0:
+            p["projFull"] = p["proj"]
+            p["proj"] = round(p["proj"] * p["games"] / 17, 1)
+            scaled += 1
+    # re-derive the composite for scaled players from where the scaled projection
+    # sits among his position (others keep their blended full-season projection)
+    for p in players:
+        if p.get("projFull") is None:
+            continue
+        peers = [x for x in players if x["pos"] == p["pos"] and x is not p]
+        p["cpos"] = 1 + sum(1 for x in peers if x["proj"] > p["proj"])
+        ladder = sorted((x["rank"] for x in peers if x.get("rank") and x["rank"] < 9000))
+        p["cons"] = ladder[min(len(ladder) - 1, p["cpos"] - 1)] if ladder else p.get("cons")
+    print(f"news: {hits} players matched the report, {scaled} projections scaled for missed games"
+          + (f", {len(manual)} manual entries" if manual else ""))
 
 
 # ------------------------------------------------------------------ sources
@@ -567,6 +672,7 @@ def main():
         rec.pop("id", None)
     print("rookies:", sum(1 for r in out if r["rookie"]), "| second-year:", sum(1 for r in out if r["soph"]))
     blend(out, read_sources({norm(p["name"]): p["pos"] for p in out}))
+    apply_news(out)
     out.sort(key=lambda x: (x["rank"], -x["aav"], x["name"]))
     payload = {"season": SEASON,
                "generated": datetime.now(timezone.utc).isoformat(timespec="seconds"),

@@ -256,3 +256,12 @@ table.rr td.need { color:#ffb35c; } table.rr td.full { color:var(--faint); font-
 table.rr td.sp { color:var(--soft); font-size:12px; } table.rr td.sp small { color:var(--faint); font-size:10px; }
 table.rr tr.me td { background:rgba(255,201,74,.07); }
 .rr-key { margin-top:6px; font-size:11px; color:var(--faint); } .rr-key i { font-style:normal; font-family:var(--display); font-weight:800; padding:0 5px; border-radius:2px; background:rgba(255,255,255,.04); } .rr-key i.need { color:#ffb35c; } .rr-key i.full { color:var(--faint); }
+
+.inj.games { color:var(--red); font-weight:800; margin-left:4px; }
+.news { font-size:11px; color:var(--soft); margin-top:3px; line-height:1.4; white-space:normal; }
+.news b { color:var(--ink); font-weight:700; } .news b.bad { color:var(--red); } .news b.warn { color:#ffb35c; } .news small { color:var(--faint); margin-left:4px; }
+.nw { display:flex; align-items:baseline; gap:8px; padding:5px 0; border-bottom:1px solid rgba(36,48,74,.5); font-size:12px; flex-wrap:wrap; }
+.nw:last-child { border-bottom:none; }
+.nw .nm { font-family:var(--display); font-weight:700; font-size:14px; text-transform:uppercase; }
+.nw .pos { font-weight:800; font-size:10px; letter-spacing:.08em; }
+.nw .nwt { flex:1 1 100%; color:var(--soft); font-size:11px; line-height:1.4; }

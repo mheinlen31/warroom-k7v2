@@ -79,8 +79,20 @@
   }
   const yearTag = (p) => p.rookie ? '<span class="yr r">R</span>' : p.soph ? '<span class="yr">2Y</span>' : '';
   const byeTag = (p) => p.bye ? `<span class="bye">bye ${p.bye}</span>` : '';
-  const injHtml = (p) => !p.inj ? '' : p.inj === 'QUESTIONABLE'
-    ? '<span class="inj q">Q</span>' : `<span class="inj">${esc(p.inj[0] + p.inj.slice(1, 3).toLowerCase())}</span>`;
+  const INJ_LABEL = { Q: 'Q', D: 'Dbt', OUT: 'Out', IR: 'IR', SUSP: 'Susp', PUP: 'PUP', DAY_TO_DAY: 'DTD', QUESTIONABLE: 'Q' };
+  const injHtml = (p) => !p.inj ? '' : `<span class="inj${p.inj === 'Q' || p.inj === 'QUESTIONABLE' || p.inj === 'DAY_TO_DAY' ? ' q' : ''}">${esc(INJ_LABEL[p.inj] || (p.inj[0] + p.inj.slice(1, 3).toLowerCase()))}</span>`
+    + (p.games != null && p.games < 17 ? `<span class="inj games" title="projection scaled to ${p.games} games">~${p.games} gm</span>` : '');
+  // the latest word on a player: the report's status + blurb (always when he's
+  // not Active, otherwise only when it's fresh), plus any note of ours
+  const FRESH_MS = 3 * 86400000;
+  const newsHtml = (p) => {
+    const n = p.news; const bits = [];
+    if (p.newsNote) bits.push(`<b>${esc(p.newsNote)}</b>`);
+    if (n && (n.status !== 'Active' || (Date.now() - new Date(n.date).getTime()) < FRESH_MS)) {
+      bits.push(`${n.status !== 'Active' ? `<b class="${/Out|Reserve|Susp|PUP/.test(n.status) ? 'bad' : 'warn'}">${esc(n.status)}${n.type ? ' · ' + esc(n.type) : ''}${n.return ? ' · back ' + esc(n.return.slice(5).replace('-', '/')) : ''}</b> · ` : ''}${esc(n.note)}${n.date ? ` <small>${esc(n.date.slice(5).replace('-', '/'))}</small>` : ''}`);
+    }
+    return bits.length ? `<div class="news">${bits.join('<br>')}</div>` : '';
+  };
 
   function renderCockpit() {
     if (!R) return;
@@ -224,7 +236,17 @@
           return `<td class="${cls}" title="${esc(tip)}">${n}</td>`; }).join('')}<td class="sp">${r.filled}<small>/15</small></td></tr>`).join('')}</tbody></table>
       <div class="fact rr-key"><i class="need">n</i> short of a starter there · <i class="full">n</i> at the position max</div>
     </div>`;
-    box.innerHTML = plan + nomCard + drainCard + flierCard + roster + budgets + rostersCard;
+    // ---- news watch: anyone that matters who isn't simply Active ----
+    const watchList = R.avail.filter((p) => (p.news && p.news.status !== 'Active') || (p.games != null && p.games < 17))
+      .filter((p) => p.projFull ? p.projFull > 60 : p.proj > 60 || p.aav >= 3)
+      .sort((a, b) => (b.projFull || b.proj) - (a.projFull || a.proj)).slice(0, 14);
+    const newsCard = `<div class="card">
+      <h4>Injury &amp; news watch · not simply active</h4>
+      ${watchList.length ? watchList.map((p) => `<div class="nw"><span class="nm">${esc(p.name)}</span><span class="pos ${posClass(p.pos)}">${esc(p.pos)}</span>${injHtml(p)}
+        <span class="nwt">${p.newsNote ? esc(p.newsNote) : p.news ? esc(p.news.note) : ''}</span></div>`).join('')
+        : '<div class="fact">Nobody who matters is on the report.</div>'}
+    </div>`;
+    box.innerHTML = plan + nomCard + drainCard + flierCard + roster + budgets + rostersCard + newsCard;
   }
 
   function renderTargets() {
@@ -378,7 +400,7 @@
         <td class="pl"><div class="nm">${esc(p.name)}</div>
           <div class="meta"><span class="pos ${posClass(p.pos)}">${esc(p.pos)}${byPosView ? '' : p.compRank}</span>
             ${p.nfl ? `<span>${esc(p.nfl)}</span>` : ''}${byeTag(p)}${yearTag(p)}${injHtml(p)}${cons ? `<span>${cons}</span>` : ''}${srcs}</div>
-          <div class="meta2">${statLine(p)}</div></td>
+          <div class="meta2">${statLine(p)}</div>${newsHtml(p)}</td>
         <td class="proj wide">${p.proj ? p.proj.toFixed(0) : '—'}</td>
         <td class="model">${money(p.model)}</td>
         <td class="mkt">${money(p.mkt)}</td>
@@ -458,7 +480,7 @@
           <div class="oc-eyebrow"><span class="dot"></span>On the clock${watch.has(p.name) ? ' <i class="wflag">★ on your watch list</i>' : ''}</div>
           <div class="oc-name">${esc(p.name)}</div>
           <div class="oc-sub"><span class="pos ${posClass(p.pos)}">${esc(p.pos)}${p.compRank || p.posRank}</span>${p.nfl ? ' · ' + esc(p.nfl) : ''}${p.bye ? ` · bye ${p.bye}` : ''}${p.rookie ? ' · rookie' : p.soph ? ' · 2nd year' : ''} · proj ${p.proj.toFixed(0)} · tier ${p.tier}${p.cliff ? ' · cliff after him' : ''}${p.cons ? ` · rank ${p.cons} (${p.nsrc} src)` : ''}${p.espnPos ? ` · ESPN ${esc(p.pos.replace('/', ''))}${p.espnPos}` : ''}${Object.entries(p.srcPos || {}).map(([l, r]) => ` · ${esc(l)} ${esc(p.pos.replace('/', ''))}${r}${p.srcTier && p.srcTier[l] ? ` T${p.srcTier[l]}` : ''}${p.srcProj && p.srcProj[l] ? ` (${Math.round(p.srcProj[l])} pts)` : ''}`).join('')}${injHtml(p) ? ' · ' + injHtml(p) : ''}</div>
-        <div class="oc-sub oc-last">${statLine(p)}</div>
+        <div class="oc-sub oc-last">${statLine(p)}</div>${newsHtml(p)}
         </div>
         <div class="oc-bid"><span>current bid</span><b>${bid ? '$' + bid : '—'}</b></div>
       </div>

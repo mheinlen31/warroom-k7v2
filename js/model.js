@@ -367,7 +367,7 @@ window.GuideModel = (function () {
       // position is flagged.
       const youEdge = (p) => p.payTo - p.mkt;
       const targets = starterOpen.map((sl) => {
-        const talent = avail.filter((p) => sl.takes.includes(p.pos) && p.payTo > 0)
+        const talent = avail.filter((p) => sl.takes.includes(p.pos) && p.payTo > 0 && !(p.games != null && p.games <= 8))
           .sort((a, b) => b.vor - a.vor);
         const reach = (p) => p.mkt <= st.maxBid;
         const picks = talent.slice(0, 15).filter(reach)

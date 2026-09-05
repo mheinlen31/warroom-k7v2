@@ -62,3 +62,16 @@ last season's actuals in the league's scoring before anything is blended, so a
 source built on 6-point passing TDs (The Athletic) needs no rescaling and one
 built on 4 gets scaled up. Add any other difference there as stat id -> extra
 points per unit.
+
+## News, injuries, missed games
+
+Every rebuild pulls ESPN's league-wide injury report: status (Questionable, Out,
+Injured Reserve, Suspension...), the injury, the latest blurb, and a projected
+return date. A player who is Out / IR / suspended with a return date has his
+projection scaled to the games he'll play (Week 1 = the first Sunday), and his
+composite rank re-derived from that. `sources/news.json` overrides by hand:
+
+    { "Josh Jacobs": { "games": 10, "note": "exempt list · court Sept 10" } }
+
+Rows show the status, the blurb and "~10 gm"; the clock panel shows it large;
+the Injury & news watch card lists everyone who matters who isn't simply Active.
