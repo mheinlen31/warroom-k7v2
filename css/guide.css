@@ -160,3 +160,8 @@ td.team-cell { text-align:left; font-size:11px; color:var(--soft); text-transfor
 tr.onclock td { background:rgba(224,27,36,.12); box-shadow:inset 3px 0 0 var(--red); }
 #sort-btn { flex:0 0 auto; }
 @media (prefers-reduced-motion:reduce) { .oc-eyebrow .dot { animation:none; } }
+
+.ow em { font-style:normal; font-size:10px; color:var(--faint); letter-spacing:.06em; text-transform:uppercase; }
+.oc-foot i.chase, .oc-foot i.avoid { font-style:normal; font-size:10px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; padding:1px 5px; border-radius:2px; }
+.oc-foot i.chase { color:#ff9a9e; background:rgba(224,27,36,.18); }
+.oc-foot i.avoid { color:#8ff0bb; background:rgba(53,208,127,.16); }

@@ -86,13 +86,18 @@ for p in ('RB', 'WR'):
     xs = [r for r in P if pos(r) == p and r['price'] >= 30]
     bust[p] = {"n": len(xs), "rate": round(sum(1 for r in xs if (r['rk_ppr'] or 999) > 24 or r['dnp']) / len(xs), 2)}
 
+# owner first names in the draft database -> current franchise (from Matt, Sept 5 2026)
+OWNER_TEAM = {"Matt": "Silent Pugios", "Leo": "Centersup", "Mike": "House Bom", "John": "Juice",
+              "Bob": "The Pu Pu Platters", "Mark": "Ben Fong Torres", "Pat": "AFRESHAYPEPPER ASAYWHEN",
+              "Steve": "Paw", "AJ": "Chance", "Brian": "Magic Rats"}
+
 R = [r for r in D if r['year'] >= RECENT]; lgtot = sum(r['price'] for r in R)
 lg = {p: sum(r['price'] for r in R if pos(r) == p) / lgtot for p in POS}
 owners = []
 for o in sorted({r['owner'] for r in R}):
     ors = [r for r in R if r['owner'] == o]; tot = sum(r['price'] for r in ors) or 1
     tilt = {p: round((sum(r['price'] for r in ors if pos(r) == p) / tot - lg[p]) * 100) for p in ('QB', 'RB', 'WR', 'TE')}
-    owners.append({"owner": o, "years": len({r['year'] for r in ors}), "avg": round(S.mean(r['price'] for r in ors), 1),
+    owners.append({"owner": o, "team": OWNER_TEAM.get(o), "years": len({r['year'] for r in ors}), "avg": round(S.mean(r['price'] for r in ors), 1),
                    "big": sum(1 for r in ors if r['price'] >= 50), "tilt": tilt,
                    "lean": max(tilt, key=lambda p: abs(tilt[p]))})
 

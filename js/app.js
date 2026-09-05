@@ -117,7 +117,7 @@
     const th = T.topHeavy, hits = T.dollarHits, k = T.kdst;
     const owners = T.owners.slice().sort((a, b) => Math.abs(b.tilt[b.lean]) - Math.abs(a.tilt[a.lean])).map((o) => {
       const v = o.tilt[o.lean];
-      return `<div class="ow"><b>${esc(o.owner)}</b><span class="${v > 0 ? 'pos-edge' : 'neg-edge'}">${v > 0 ? 'chases' : 'avoids'} ${o.lean} ${v > 0 ? '+' : ''}${v}%</span>
+      return `<div class="ow"><b>${esc(o.team || o.owner)}</b>${o.team ? `<em>${esc(o.owner)}</em>` : ''}<span class="${v > 0 ? 'pos-edge' : 'neg-edge'}">${v > 0 ? 'chases' : 'avoids'} ${o.lean} ${v > 0 ? '+' : ''}${v}%</span>
         <small>${o.big} pick${o.big === 1 ? '' : 's'} of $50+ · avg $${o.avg}</small></div>`;
     }).join('');
     $('trends').innerHTML = `
@@ -273,6 +273,9 @@
     else if (bid < p.model) { verdict = `Worth up to <b>$${Math.min(p.model, myMax)}</b> to you${p.model > myMax ? ' (capped by your max)' : ''}`; cls = 'go'; }
     else { verdict = `Past his value — let him go above <b>$${p.model}</b>`; cls = 'stop'; }
     const alts = R.byPos[p.pos].filter((x) => x !== p && x.vor > 0).slice(0, 3);
+    // nine years of their own bidding: who at this table chases this position
+    const tiltFor = (teamName) => { const o = (T && T.owners || []).find((x) => x.team === teamName); return o ? (o.tilt[p.pos] || 0) : 0; };
+    const tag = (teamName) => { const v = tiltFor(teamName); return v >= 8 ? ` <i class="chase">chases ${esc(p.pos)}</i>` : v <= -8 ? ` <i class="avoid">avoids ${esc(p.pos)}</i>` : ''; };
     const sc = R.scarcity[p.pos];
     box.innerHTML = `<div class="oc-card ${cls}">
       <div class="oc-top">
@@ -292,7 +295,7 @@
       </div>
       <div class="oc-verdict">${verdict}</div>
       <div class="oc-foot">
-        <span><b>Can raise:</b> ${raisers.length ? raisers.slice(0, 5).map(({ t, st }) => `${esc(t.name)} $${st.maxBid}`).join(' · ') + (raisers.length > 5 ? ` · +${raisers.length - 5}` : '') : 'nobody'}</span>
+        <span><b>Can raise:</b> ${raisers.length ? raisers.slice(0, 6).map(({ t, st }) => `${esc(t.name)} $${st.maxBid}${tag(t.name)}`).join(' · ') + (raisers.length > 6 ? ` · +${raisers.length - 6}` : '') : 'nobody'}</span>
         <span><b>${esc(p.pos)} left:</b> ${sc.solid} solid · ${sc.label}</span>
         <span><b>Next best:</b> ${alts.length ? alts.map((x) => `${esc(x.name)} $${x.model}`).join(' · ') : 'nobody worth paying for'}</span>
       </div>
