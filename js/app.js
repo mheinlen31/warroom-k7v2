@@ -8,7 +8,6 @@
   const M = window.GuideModel;
   const TABS = ['ALL', 'QB', 'RB', 'WR', 'TE', 'K', 'D/ST', 'DRAFTED'];
   const posClass = (p) => 'pos-' + String(p).replace('/', '');
-  const LOGO = (n, px) => (window.TEAM_LOGOS ? window.TEAM_LOGOS.html(n, px) : '');
 
   let me = localStorage.getItem('sfg-me') || 'Silent Pugios';
   let tab = localStorage.getItem('sfg-tab') || 'ALL';
@@ -48,7 +47,7 @@
     const L = R.league, me_ = R.me;
     const seat = me_ ? `
       <div class="card">
-        <h4>${LOGO(me_.name, 18)}${esc(me_.name)}</h4>
+        <h4>${esc(me_.name)}</h4>
         <div class="stats">
           <div class="stat big${me_.remaining <= 5 ? ' red' : ''}"><b>${money(me_.remaining)}</b><span>left</span></div>
           <div class="stat"><b>${money(me_.maxBid)}</b><span>max bid</span></div>
@@ -159,7 +158,7 @@
         <td class="rk">${p.n}</td>
         <td class="pl"><div class="nm">${esc(p.name)}</div>
           <div class="meta"><span class="pos ${posClass(p.pos)}">${esc(p.pos)}</span>${p.nfl ? `<span>${esc(p.nfl)}</span>` : ''}</div></td>
-        <td class="team-cell wide">${LOGO(p.team, 14)}${esc(p.team)}</td>
+        <td class="team-cell wide">${esc(p.team)}</td>
         <td class="model">$${p.cost}</td>
         <td class="mkt">${aav != null ? '$' + aav : '—'}</td>
         <td class="edge">${dh}</td>
@@ -167,7 +166,7 @@
     };
     const head = (label, list) => {
       const t = list.reduce((s, p) => s + p.cost, 0);
-      return `<tr class="tier-head"><td colspan="6">${LOGO(label, 14)}${esc(label)} · ${list.length} · $${t} · avg $${Math.round(t / list.length)}</td></tr>`;
+      return `<tr class="tier-head"><td colspan="6">${esc(label)} · ${list.length} · $${t} · avg $${Math.round(t / list.length)}</td></tr>`;
     };
     let body = '';
     if (dmode === 'pos') {
@@ -226,7 +225,7 @@
   function renderRecent() {
     if (!R) return;
     $('recent').innerHTML = R.recent.length ? `<h4>Last picks</h4><div class="rl">${R.recent.map((p) =>
-      `<span class="rp"><b>${esc(p.name)}</b><i>$${p.cost}</i><em>${LOGO(p.team, 12)}${esc(p.team)}</em></span>`).join('')}</div>` : '';
+      `<span class="rp"><b>${esc(p.name)}</b><i>$${p.cost}</i><em>${esc(p.team)}</em></span>`).join('')}</div>` : '';
   }
 
   function renderMeSelect() {
