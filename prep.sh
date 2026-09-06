@@ -5,6 +5,8 @@ set -e
 cd "$(dirname "$0")"
 echo "==> pulling ESPN pool with projections"
 python3 build_players.py
+echo "==> grades data for the draft board (commit + push ../draft-board separately)"
+python3 export_grades_data.py
 echo "==> cache-busting"
 STAMP=$(date +%Y%m%d%H%M)
 sed -i '' -E "s/(css\/guide\.css|js\/[a-z]+\.js)\?v=[A-Za-z0-9]+/\1?v=$STAMP/g" index.html
