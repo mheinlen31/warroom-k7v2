@@ -142,7 +142,39 @@
             ${L.tilt && L.tilt[pos] && L.tilt[pos].n >= 3 && Math.abs(L.tilt[pos].x - 1) >= 0.08 ? `<div class="t ${L.tilt[pos].x > 1 ? 'hot' : 'cold'}">paying ${L.tilt[pos].x.toFixed(2)}×</div>` : ''}
           </div>`; }).join('')}</div>
       </div>`;
-    $('cockpit').innerHTML = seat + league + scar;
+    $('cockpit').innerHTML = league + scar;
+  }
+
+  /* One line of the numbers you need while a player is up: your money, your
+     open spots, who's nominating. Sits right above the rankings. */
+  function renderSeat() {
+    const box = $('seat');
+    if (!R || !R.me) { box.innerHTML = ''; return; }
+    const m = R.me, L = R.league;
+    box.innerHTML = `<div class="seat-in">
+      <span class="seat-name">${esc(m.name)}</span>
+      <span class="seat-n big${m.remaining <= 5 ? ' red' : ''}"><b>${money(m.remaining)}</b><small>left</small></span>
+      <span class="seat-n"><b>${money(m.maxBid)}</b><small>max bid</small></span>
+      <span class="seat-n"><b>${m.open}</b><small>spots</small></span>
+      <span class="seat-n"><b>${money(m.avgPerOpen)}</b><small>avg/spot</small></span>
+      ${m.tax ? `<span class="seat-n red"><b>−${money(m.tax)}</b><small>tax</small></span>` : ''}
+      <span class="seat-needs">${m.needs.length ? m.needs.map((n) => `<i class="chip ${posClass(n === 'FLEX' || n === 'BE' ? 'X' : n)}">${esc(n)}</i>`).join('') : '<i class="chip">roster full</i>'}</span>
+      ${L.nominator ? `<span class="seat-nom"><b>${esc(L.nominator)}</b> nominates${L.untilMe === 0 ? " — you're up" : L.untilMe != null ? ` · you in ${L.untilMe}` : ''}</span>` : ''}
+    </div>`;
+  }
+
+  /* who needs this position tonight, and how badly */
+  const needLabel = (n, pos) => n.degree === 3 ? `needs ${n.starters > 1 ? n.starters + ' ' : ''}${pos}` : n.degree === 2 ? 'FLEX open' : n.degree === 1 ? 'bench only' : n.can ? 'full' : "can't";
+  const needTag = (n, pos) => `<i class="need need${n.degree}">${esc(needLabel(n, pos))}</i>`;
+  function needsLine(pos) {
+    if (!R || !R.posNeeds || !R.posNeeds[pos]) return '';
+    const L = R.posNeeds[pos];
+    const must = L.filter((n) => n.degree === 3), flex = L.filter((n) => n.degree === 2), bench = L.filter((n) => n.degree === 1), cant = L.filter((n) => n.degree === 0);
+    const nm = (n) => `${esc(n.name)}${n.starters > 1 ? ` ×${n.starters}` : ''} <small>$${n.maxBid}</small>`;
+    return `<div class="hint needs"><b>Still need ${esc(pos)}:</b> ${must.length ? must.map(nm).join(' · ') : 'nobody'}
+      ${flex.length ? `<span class="dim">· FLEX open: ${flex.map((n) => esc(n.name)).join(', ')}</span>` : ''}
+      ${bench.length ? `<span class="dim">· bench only: ${bench.length}</span>` : ''}
+      ${cant.length ? `<span class="dim">· can't: ${cant.map((n) => esc(n.name)).join(', ')}</span>` : ''}</div>`;
   }
 
   /* Second row of the cockpit: the plan, the drain list, your roster.
@@ -191,7 +223,7 @@
     const nomCard = `<div class="card">
       <h4>Nominate now · your targets with the clearest path</h4>
       ${nn.length ? nn.map((p) => `<div class="dr"><span class="nm">${esc(p.name)}</span><span class="pos ${posClass(p.pos)}">${esc(p.pos)}</span>
-        <span class="drv">${p.contest ? `<b class="warn">${p.contest}</b> hunting${p.contestBy.length ? ` (${esc(p.contestBy.slice(0, 2).join(', '))}${p.contestBy.length > 2 ? ` +${p.contestBy.length - 2}` : ''})` : ''}` : '<b class="ok">clear path</b>'} · you $${p.payTo} · room $${p.mkt}</span></div>`).join('')
+        <span class="drv">${p.contest ? `<b class="warn">${p.contest}</b> hunting${p.contestBy.length ? ` (${p.contestBy.slice(0, 2).map((nm) => { const n = (R.posNeeds[p.pos] || []).find((x) => x.name === nm); return esc(nm) + (n ? ` <i>${esc(needLabel(n, p.pos))}</i>` : ''); }).join(', ')}${p.contestBy.length > 2 ? ` +${p.contestBy.length - 2}` : ''})` : ''}` : '<b class="ok">clear path</b>'} · you $${p.payTo} · room $${p.mkt}</span></div>`).join('')
         : '<div class="fact">Nothing on your list has a clear path yet — drain instead.</div>'}
     </div>`;
     // ---- $1 fliers ----
@@ -300,9 +332,11 @@
   }
 
   function ladderHint(pos) {
-    if (!T || !T.ladder[pos] || pos === 'ALL') return '';
+    if (pos === 'ALL') return '';
+    const needs = needsLine(pos);
+    if (!T || !T.ladder[pos]) return needs;
     const l = T.ladder[pos];
-    return `<div class="hint">In this league ${pos}${[1, 3, 5, 8, 12].filter((n) => l[n] != null)
+    return needs + `<div class="hint small">Past years: ${pos}${[1, 3, 5, 8, 12].filter((n) => l[n] != null)
       .map((n) => ` #${n} ≈ <b>$${l[n]}</b>`).join(' ·')}</div>`;
   }
 
@@ -471,8 +505,11 @@
     const why = meCan.ok && p.why ? `<div class="oc-why">${esc(p.why)}</div>` : '';
     const alts = R.byPos[p.pos].filter((x) => x !== p && x.vor > 0).slice(0, 3);
     // nine years of their own bidding: who at this table chases this position
-    const tiltFor = (teamName) => { const o = (T && T.owners || []).find((x) => x.team === teamName); return o ? (o.tilt[p.pos] || 0) : 0; };
-    const tag = (teamName) => { const v = tiltFor(teamName); return v >= 8 ? ` <i class="chase">chases ${esc(p.pos)}</i>` : v <= -8 ? ` <i class="avoid">avoids ${esc(p.pos)}</i>` : ''; };
+    // who needs this position TONIGHT, and how badly -- not what they did in past years
+    const needs = (R.posNeeds && R.posNeeds[p.pos]) || [];
+    const needOf = (teamName) => needs.find((n) => n.name === teamName);
+    const tag = (teamName) => { const n = needOf(teamName); return n ? ' ' + needTag(n, p.pos) : ''; };
+    const must = needs.filter((n) => n.degree === 3 && n.name !== me), flexers = needs.filter((n) => n.degree === 2 && n.name !== me);
     const sc = R.scarcity[p.pos];
     box.innerHTML = `<div class="oc-card ${cls}">
       <div class="oc-top">
@@ -495,7 +532,7 @@
       <div class="oc-verdict">${verdict}</div>${why}
       <div class="oc-foot">
         <span><b>Can raise:</b> ${raisers.length ? raisers.slice(0, 6).map(({ t, st }) => `${esc(t.name)} $${st.maxBid}${tag(t.name)}`).join(' · ') + (raisers.length > 6 ? ` · +${raisers.length - 6}` : '') : 'nobody'}</span>
-        <span><b>${esc(p.pos)} left:</b> ${sc.solid} solid · ${sc.label}</span>
+        <span><b>${esc(p.pos)} market:</b> ${must.length ? `${must.length} need a starter (${must.map((n) => esc(n.name) + (n.starters > 1 ? ' ×' + n.starters : '') + ' $' + n.maxBid).join(', ')})` : 'nobody needs a starter'}${flexers.length ? ` · ${flexers.length} FLEX open` : ''} · ${sc.solid} solid left</span>
         <span><b>Next best:</b> ${alts.length ? alts.map((x) => `${esc(x.name)} $${x.model}${x.payTo != null && x.payTo !== x.model ? ` <i class="yu">you $${x.payTo}</i>` : ''}`).join(' · ') : 'nobody worth paying for'}</span>
       </div>
     </div>`;
@@ -523,7 +560,7 @@
 
   function render() {
     R = state ? M.compute(POOL, state, me) : null;
-    renderMeSelect(); renderCockpit(); renderPlan(); renderTargets(); renderTrends(); renderBoard(); renderRecent(); renderClock();
+    renderMeSelect(); renderSeat(); renderCockpit(); renderPlan(); renderTargets(); renderTrends(); renderBoard(); renderRecent(); renderClock();
   }
 
   // sticky offsets: measure the real header + tabs heights (the top bar wraps

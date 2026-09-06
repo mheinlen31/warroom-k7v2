@@ -89,7 +89,7 @@ window.GuideModel = (function () {
     // points-over-replacement still on the board). Habit alone over-funds a
     // position whose stars were all kept; value alone ignores how the room
     // actually behaves.
-    const HABIT = 0.5;
+    const HABIT = 0.25;                                             // history is a small factor; this year's value carries the split
     const target = {};
     let habitSum = 0; const habit = {};
     POSITIONS.forEach((p) => {
@@ -115,7 +115,7 @@ window.GuideModel = (function () {
     // room pays one QB and shrugs at the rest, but spreads RB money across
     // several stars. Blend each position's historical price ladder (the shape
     // of what the Nth most expensive pick went for) with this year's VOR.
-    const SHAPE = 0.5;
+    const SHAPE = 0.25;
     POSITIONS.forEach((pos) => {
       const list = byPos[pos];
       const n = Math.max(1, Math.min(list.length, Math.round(qualityDemand[pos])));
@@ -183,6 +183,24 @@ window.GuideModel = (function () {
       // who can actually pay the market price AND legally roster him
       p.bidders = ts.filter(({ t, st }) =>
         st.open > 0 && st.maxBid >= p.mkt && E.canRoster(t, p.pos).ok).length;
+    });
+
+    // ---- who needs what, in THIS draft ----
+    // For every position, every team's live need: open dedicated starter
+    // slots for it (must have), an open FLEX it could fill (wants), bench room
+    // only (might), or can't take one at all. Sorted by degree, then money.
+    const posNeeds = {};
+    POSITIONS.forEach((pos) => {
+      posNeeds[pos] = ts.map(({ t, st }) => {
+        const starters = E.SLOTS.filter((sl) => sl.takes && sl.id !== 'FLEX' && !st.slots[sl.id] && sl.takes.includes(pos)).length;
+        const flex = (pos === 'K' || pos === 'D/ST') ? 0 : E.SLOTS.filter((sl) => sl.id === 'FLEX' && !st.slots[sl.id]).length;
+        const bench = E.SLOTS.filter((sl) => !sl.takes && !st.slots[sl.id]).length;
+        const have = (t.players || []).filter((p) => p.pos === pos).length;
+        const can = st.open > 0 && E.canRoster(t, pos).ok;
+        const degree = !can ? 0 : starters > 0 ? 3 : flex > 0 ? 2 : bench > 0 ? 1 : 0;
+        return { name: t.name, ti: t.ti, starters, flex, bench, have, can, degree,
+                 maxBid: st.maxBid, remaining: st.remaining, me: t.name === myName };
+      }).sort((a, b) => b.degree - a.degree || b.maxBid - a.maxBid);
     });
 
     // ---- who's hunting whom ----
@@ -410,7 +428,7 @@ window.GuideModel = (function () {
 
     const recent = ((state && state.picks) || []).slice(-10).reverse();
     return {
-      avail, byPos, repl, scarcity, me, recent, target, auctionSpentAt,
+      avail, byPos, repl, scarcity, me, recent, target, auctionSpentAt, posNeeds,
       league: { moneyLeft, openSpots, spendable, inflation, tilt, nominator, untilMe, teams: ts.length,
                 picks: ((state && state.picks) || []).length },
       teams: ts.map(({ t, st }) => ({ name: t.name, remaining: st.remaining, maxBid: st.maxBid, open: st.open,
