@@ -283,3 +283,27 @@ table.rr tr.me td { background:rgba(255,201,74,.07); }
 .hint.needs { font-size:12px; color:var(--soft); } .hint.needs b { color:#ffb35c; } .hint.needs small { color:var(--faint); } .hint.needs .dim { color:var(--faint); }
 .hint.small { font-size:10.5px; color:var(--faint); }
 .dr .drv i { font-style:normal; color:#ffb35c; font-size:10px; }
+
+/* ---- compact list: one line a player, tap to open ---- */
+tr[hidden] { display:none; }
+table.list tr.row { cursor:pointer; }
+table.list tr.row td { padding:5px 6px; }
+table.list tr.row:hover td { background:rgba(255,255,255,.025); }
+table.list tr.row.open td { border-bottom:none; background:rgba(255,255,255,.03); }
+table.list td.pl { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:0; }
+table.list td.pl .nm { font-family:var(--display); font-weight:700; font-size:15px; text-transform:uppercase; letter-spacing:.01em; }
+table.list td.pl .tag { font-size:9.5px; font-weight:800; letter-spacing:.08em; margin-left:7px; color:var(--faint); text-transform:uppercase; }
+table.list td.pl .tag.tm { color:var(--dim); letter-spacing:.06em; }
+table.list td.model { font-size:18px; }
+table.list td.mkt { line-height:1.1; }
+table.list td.mkt .pos-edge, table.list td.mkt .neg-edge, table.list td.mkt .zero-edge { display:block; font-size:10.5px; font-weight:800; margin-top:1px; }
+.cross { font-style:normal; font-weight:900; font-size:12px; margin-left:7px; vertical-align:baseline; }
+.cross.bad { color:var(--red); } .cross.q { color:#ffb35c; }
+.cross small { font-size:9px; font-weight:800; margin-left:1px; }
+table.list tr.det td { padding:0 8px 9px 40px; background:rgba(255,255,255,.03); text-align:left; white-space:normal; }
+.det-in { border-left:2px solid var(--line2); padding:5px 10px 2px; }
+.det-in .meta { white-space:normal; line-height:1.7; }
+.det-in .meta i.dim { font-style:normal; color:var(--faint); }
+.why { font-size:11px; color:var(--soft); margin-top:5px; line-height:1.4; } .why b { color:var(--gold); }
+#expand-btn { white-space:nowrap; }
+@media (max-width:640px) { table.list td.pl .nm { font-size:14px; } table.list td.model { font-size:16px; } table.list tr.det td { padding-left:24px; } }

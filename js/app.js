@@ -14,6 +14,10 @@
   if (!TABS.includes(tab)) tab = 'ALL';
   let q = '';
   let dmode = localStorage.getItem('sfg-dmode') || 'order';   // drafted view: order | pos | team
+  // compact list by default; a row opens on tap, or everything opens at once
+  const expanded = new Set();                      // exceptions: open rows, or closed rows when expandAll is on
+  let expandAll = localStorage.getItem('sfg-expand') === '1';
+  const isOpen = (n) => expandAll ? !expanded.has(n) : expanded.has(n);
   const SORTS = ['rank', 'model', 'edge', 'you'];   // composite rank is the default view
   let sortMode = SORTS.includes(localStorage.getItem('sfg-sort2')) ? localStorage.getItem('sfg-sort2') : 'rank';
   let clock = null;                                            // who's on the clock, from the board
@@ -35,6 +39,21 @@
     renderBoard();
   });
   $('q').addEventListener('input', () => { q = $('q').value.trim().toLowerCase(); renderBoard(); });
+  $('expand-btn').addEventListener('click', () => {
+    expandAll = !expandAll; expanded.clear();
+    try { localStorage.setItem('sfg-expand', expandAll ? '1' : '0'); } catch (err) { /* private mode */ }
+    renderBoard();
+  });
+  $('board').addEventListener('click', (e) => {
+    if (e.target.closest('.star, a, button')) return;
+    const tr = e.target.closest('tr.row'); if (!tr) return;
+    const n = tr.dataset.n;
+    expanded.has(n) ? expanded.delete(n) : expanded.add(n);
+    const det = tr.nextElementSibling;
+    const open = isOpen(n);
+    if (det && det.classList.contains('det')) det.hidden = !open;
+    tr.classList.toggle('open', open);
+  });
   $('sort-btn').addEventListener('click', () => {
     sortMode = SORTS[(SORTS.indexOf(sortMode) + 1) % SORTS.length];
     try { localStorage.setItem('sfg-sort2', sortMode); } catch (err) { /* private mode */ }
@@ -82,6 +101,16 @@
   const INJ_LABEL = { Q: 'Q', D: 'Dbt', OUT: 'Out', IR: 'IR', SUSP: 'Susp', PUP: 'PUP', DAY_TO_DAY: 'DTD', QUESTIONABLE: 'Q' };
   const injHtml = (p) => !p.inj ? '' : `<span class="inj${p.inj === 'Q' || p.inj === 'QUESTIONABLE' || p.inj === 'DAY_TO_DAY' ? ' q' : ''}">${esc(INJ_LABEL[p.inj] || (p.inj[0] + p.inj.slice(1, 3).toLowerCase()))}</span>`
     + (p.games != null && p.games < 17 ? `<span class="inj games" title="projection scaled to ${p.games} games">~${p.games} gm</span>` : '');
+  // list view: a cross when there's an injury concern (red: out / IR / suspended /
+  // doubtful / missed games; amber: questionable or day-to-day)
+  const injFlag = (p) => {
+    const games = p.games != null && p.games < 17;
+    const bad = games || /^(OUT|IR|SUSP|PUP|D)$/.test(p.inj || '');
+    const q = /^(Q|DTD)$/.test(p.inj || '');
+    if (!bad && !q) return '';
+    const label = [INJ_LABEL[p.inj] || p.inj, games ? `~${p.games} games` : '', p.news && p.news.type ? p.news.type : ''].filter(Boolean).join(' · ');
+    return `<i class="cross ${bad ? 'bad' : 'q'}" title="${esc(label)}">✚${games ? `<small>${p.games}</small>` : ''}</i>`;
+  };
   // the latest word on a player: the report's status + blurb (always when he's
   // not Active, otherwise only when it's fresh), plus any note of ours
   const FRESH_MS = 3 * 86400000;
@@ -386,6 +415,7 @@
   }
 
   function renderBoard() {
+    $('expand-btn').hidden = tab === 'DRAFTED';
     if (tab === 'DRAFTED') { $('sort-btn').hidden = true; if (!state) { $('board').innerHTML = '<div class="empty">waiting for the board…</div>'; return; } renderDrafted(); return; }
     if (!R) { $('board').innerHTML = '<div class="empty">waiting for the board…</div>'; return; }
     let rows = [];
@@ -424,29 +454,31 @@
       let head = '';
       if (byPosView && p.tier > lastTier) {          // composite order can interleave tiers; head each once
         lastTier = p.tier;
-        head = `<tr class="tier-head"><td colspan="9">Tier ${p.tier}</td></tr>`;
+        head = `<tr class="tier-head"><td colspan="6">Tier ${p.tier}</td></tr>`;
       }
       const cons = p.cons ? `rank ${p.cons}${p.spread > 8 ? ` <span title="sources disagree by ${p.spread} overall spots">±${p.spread}</span>` : ''} · ${p.nsrc} src` : '';
-      const srcs = srcChips(p);
-      return head + `<tr class="${p.cliff && byPosView ? 'cliff' : ''}${watch.has(p.name) ? ' watched' : ''}" data-n="${esc(p.name)}">
+      const open = isOpen(p.name);
+      const you = p.payTo == null ? '' : p.payTo === 0 ? '—' : money(p.payTo);
+      // list view: name, position, team, a cross if he's hurt, and the three prices
+      return head + `<tr class="row${p.cliff && byPosView ? ' cliff' : ''}${watch.has(p.name) ? ' watched' : ''}${open ? ' open' : ''}" data-n="${esc(p.name)}">
         <td class="w"><button type="button" class="star${watch.has(p.name) ? ' on' : ''}" data-w="${esc(p.name)}" title="Watch list">★</button></td>
         <td class="rk">${byPosView ? p.compRank : i + 1}</td>
-        <td class="pl"><div class="nm">${esc(p.name)}</div>
-          <div class="meta"><span class="pos ${posClass(p.pos)}">${esc(p.pos)}${byPosView ? '' : p.compRank}</span>
-            ${p.nfl ? `<span>${esc(p.nfl)}</span>` : ''}${byeTag(p)}${yearTag(p)}${injHtml(p)}${cons ? `<span>${cons}</span>` : ''}${srcs}</div>
-          <div class="meta2">${statLine(p)}</div>${newsHtml(p)}</td>
-        <td class="proj wide">${p.proj ? p.proj.toFixed(0) : '—'}</td>
+        <td class="pl"><span class="nm">${esc(p.name)}</span><span class="tag ${posClass(p.pos)}">${esc(p.pos)}${byPosView ? '' : p.compRank}</span>${p.nfl ? `<span class="tag tm">${esc(p.nfl)}</span>` : ''}${injFlag(p)}</td>
         <td class="model">${money(p.model)}</td>
-        <td class="mkt">${money(p.mkt)}</td>
-        <td class="edge">${edgeHtml(p.edge)}</td>
-        <td class="you${p.payTo > p.model ? ' up' : p.payTo < p.model ? ' down' : ''}" title="${esc(p.why || '')}">${p.payTo == null ? '' : p.payTo === 0 ? '—' : money(p.payTo)}</td>
-        <td class="bid wide${p.bidders <= 2 ? ' few' : ''}">${p.bidders}</td>
-      </tr>`;
+        <td class="you${p.payTo > p.model ? ' up' : p.payTo < p.model ? ' down' : ''}">${you}</td>
+        <td class="mkt">${money(p.mkt)}${edgeHtml(p.edge)}</td>
+      </tr>
+      <tr class="det" data-n="${esc(p.name)}"${open ? '' : ' hidden'}><td colspan="6"><div class="det-in">
+        <div class="meta">${byeTag(p)}${yearTag(p)}${injHtml(p)}<span>proj ${p.proj ? p.proj.toFixed(0) : '—'}${p.projFull ? ` <i class="dim">(${p.projFull.toFixed(0)} full season)</i>` : ''}</span>${cons ? `<span>${cons}</span>` : ''}${srcChips(p)}<span>${p.bidders} can pay</span>${p.tier ? `<span>tier ${p.tier}${p.cliff ? ' · cliff after him' : ''}</span>` : ''}</div>
+        <div class="meta2">${statLine(p)}</div>${newsHtml(p)}
+        ${p.why ? `<div class="why"><b>Your number ${you}</b> · ${esc(p.why)}</div>` : ''}
+      </div></td></tr>`;
     }).join('');
-    $('board').innerHTML = (byPosView ? ladderHint(tab) : '') + `<table>
-      <thead><tr><th></th><th class="l">#</th><th class="l">Player</th><th class="wide">Proj</th>
-        <th>Model</th><th>Mkt</th><th>Edge</th><th title="your number: what he's worth to your roster, inside your max">You</th><th class="wide">Bidders</th></tr></thead>
+    $('board').innerHTML = (byPosView ? ladderHint(tab) : '') + `<table class="list">
+      <thead><tr><th></th><th class="l">#</th><th class="l">Player</th>
+        <th>Model</th><th title="your number: what he's worth to your roster, inside your max">You</th><th>Mkt</th></tr></thead>
       <tbody>${body}</tbody></table>` + soldHtml;
+    $('expand-btn').textContent = expandAll ? 'Collapse all' : 'Expand all';
     const wt = document.querySelector('.tab[data-t="WATCH"]'); if (wt) wt.innerHTML = tabLabel('WATCH');
   }
 
