@@ -27,6 +27,17 @@ window.GuideModel = (function () {
   const norm = (n) => { const k = E.normName(n); return ALIASES[k] || k; };
 
   function compute(pool, state, myName) {
+    // preseason positional rank: where he stood among ALL players at his position
+    // before keepers and picks came off the board (composite order over the whole
+    // pool). Fixed for the night, so compute it once and stamp the pool.
+    if (!pool.__preRanked) {
+      POSITIONS.forEach((pos) => {
+        pool.filter((p) => p.pos === pos)
+          .sort((a, b) => ((a.cpos == null) - (b.cpos == null)) || (a.cpos - b.cpos) || (b.proj - a.proj))
+          .forEach((p, i) => { p.preRank = i + 1; });
+      });
+      pool.__preRanked = true;
+    }
     const teams = (state && state.teams) || [];
     const rostered = new Set();
     teams.forEach((t) => (t.players || []).forEach((p) => rostered.add(norm(p.name))));

@@ -121,7 +121,7 @@
       p.vor > 0 && repl != null ? `+${p.vor.toFixed(0)} over the ${esc(p.pos)} you'd get for $1 (${Math.round(repl)})` : null,
       p.tier ? `tier ${p.tier}${p.cliff ? ' · cliff after him' : ''}` : null].filter(Boolean).join(' · '));
     // rankings
-    const cons = p.cons ? `composite ${esc(p.pos)}${p.compRank} · rank ${p.cons}${p.spread > 8 ? ` ±${p.spread}` : ''} · ${p.nsrc} src` : '';
+    const cons = p.cons ? `<b>${esc(p.pos)}${p.compRank}</b> of what's left · <b>${esc(p.pos)}${p.preRank}</b> preseason, everyone on the board · rank ${p.cons}${p.spread > 8 ? ` ±${p.spread}` : ''} · ${p.nsrc} src` : '';
     line('Rankings', `${cons}${srcChips(p) ? ' ' + srcChips(p) : ''}${p.adp ? ` · ESPN ADP ${p.adp}` : ''}${p.aav ? ` · AAV $${p.aav}` : ''}${p.nrank > 1 && p.consEspn ? ` · ${p.nrank} ESPN rankers avg ${p.consEspn}` : ''}`);
     // last season
     const sl = statLine(p);
@@ -438,7 +438,7 @@
       return `<tr>
         <td class="rk">${p.n}</td>
         <td class="pl"><div class="nm">${esc(p.name)}</div>
-          <div class="meta"><span class="pos ${posClass(p.pos)}">${esc(p.pos)}</span>${p.nfl ? `<span>${esc(p.nfl)}</span>` : ''}</div></td>
+          <div class="meta"><span class="pos ${posClass(p.pos)}">${esc(p.pos)}${(poolByName[E.normName(p.name)] || {}).preRank || ''}</span>${p.nfl ? `<span>${esc(p.nfl)}</span>` : ''}</div></td>
         <td class="team-cell wide">${esc(p.team)}</td>
         <td class="model">$${p.cost}</td>
         <td class="mkt">${aav != null ? '$' + aav : '—'}</td>
@@ -513,7 +513,7 @@
       return head + `<tr class="row${p.cliff && byPosView ? ' cliff' : ''}${watch.has(p.name) ? ' watched' : ''}${open ? ' open' : ''}" data-n="${esc(p.name)}">
         <td class="w"><button type="button" class="star${watch.has(p.name) ? ' on' : ''}" data-w="${esc(p.name)}" title="Watch list">★</button></td>
         <td class="rk">${byPosView ? p.compRank : i + 1}</td>
-        <td class="pl"><div class="plx"><span class="nm">${esc(p.name)}</span>${injFlag(p)}<span class="tag ${posClass(p.pos)}">${esc(p.pos)}${byPosView ? '' : p.compRank}</span>${p.nfl ? `<span class="tag tm">${esc(p.nfl)}</span>` : ''}</div></td>
+        <td class="pl"><div class="plx"><span class="nm">${esc(p.name)}</span>${injFlag(p)}<span class="tag ${posClass(p.pos)}" title="${esc(p.pos)}${p.compRank} of the ${esc(p.pos)}s still available">${esc(p.pos)}${byPosView ? '' : p.compRank}</span>${p.preRank && p.preRank !== p.compRank ? `<span class="tag pre" title="preseason: ${esc(p.pos)}${p.preRank} with every player on the board">pre ${p.preRank}</span>` : ''}${p.nfl ? `<span class="tag tm">${esc(p.nfl)}</span>` : ''}</div></td>
         <td class="model">${money(p.model)}</td>
         <td class="you${p.payTo > p.model ? ' up' : p.payTo < p.model ? ' down' : ''}">${you}</td>
         <td class="mkt">${money(p.mkt)}${edgeHtml(p.edge)}</td>
@@ -594,7 +594,7 @@
         <div>
           <div class="oc-eyebrow"><span class="dot"></span>On the clock${watch.has(p.name) ? ' <i class="wflag">★ on your watch list</i>' : ''}</div>
           <div class="oc-name">${esc(p.name)}</div>
-          <div class="oc-sub"><span class="pos ${posClass(p.pos)}">${esc(p.pos)}${p.compRank || p.posRank}</span>${p.nfl ? ' · ' + esc(p.nfl) : ''}${p.bye ? ` · bye ${p.bye}` : ''}${p.rookie ? ' · rookie' : p.soph ? ' · 2nd year' : ''} · proj ${p.proj.toFixed(0)} · tier ${p.tier}${p.cliff ? ' · cliff after him' : ''}${p.cons ? ` · rank ${p.cons} (${p.nsrc} src)` : ''}${p.espnPos ? ` · ESPN ${esc(p.pos.replace('/', ''))}${p.espnPos}` : ''}${Object.entries(p.srcPos || {}).map(([l, r]) => ` · ${esc(l)} ${esc(p.pos.replace('/', ''))}${r}${p.srcTier && p.srcTier[l] ? ` T${p.srcTier[l]}` : ''}${p.srcProj && p.srcProj[l] ? ` (${Math.round(p.srcProj[l])} pts)` : ''}`).join('')}${injHtml(p) ? ' · ' + injHtml(p) : ''}</div>
+          <div class="oc-sub"><span class="pos ${posClass(p.pos)}">${esc(p.pos)}${p.compRank || p.posRank}</span>${p.preRank && p.preRank !== p.compRank ? ` <span class="pre">pre ${esc(p.pos)}${p.preRank}</span>` : ''}${p.nfl ? ' · ' + esc(p.nfl) : ''}${p.bye ? ` · bye ${p.bye}` : ''}${p.rookie ? ' · rookie' : p.soph ? ' · 2nd year' : ''} · proj ${p.proj.toFixed(0)} · tier ${p.tier}${p.cliff ? ' · cliff after him' : ''}${p.cons ? ` · rank ${p.cons} (${p.nsrc} src)` : ''}${p.espnPos ? ` · ESPN ${esc(p.pos.replace('/', ''))}${p.espnPos}` : ''}${Object.entries(p.srcPos || {}).map(([l, r]) => ` · ${esc(l)} ${esc(p.pos.replace('/', ''))}${r}${p.srcTier && p.srcTier[l] ? ` T${p.srcTier[l]}` : ''}${p.srcProj && p.srcProj[l] ? ` (${Math.round(p.srcProj[l])} pts)` : ''}`).join('')}${injHtml(p) ? ' · ' + injHtml(p) : ''}</div>
         <div class="oc-sub oc-last">${statLine(p)}</div>${newsHtml(p)}
         </div>
         <div class="oc-bid"><span>current bid</span><b>${bid ? '$' + bid : '—'}</b></div>

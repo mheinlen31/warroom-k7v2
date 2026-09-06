@@ -332,3 +332,7 @@ table.list td.model, table.list td.you, table.list td.mkt, table.list td.rk, tab
 .dl .src { color:var(--gold); font-weight:700; margin-left:4px; } .dl .src.espn { color:var(--soft); }
 .det-in .news { margin-top:5px; }
 @media (max-width:640px) { .dl { flex-direction:column; gap:1px; } .dl > b { flex:none; } }
+
+/* preseason positional rank, next to the rank among what's left */
+table.list .plx .tag.pre { color:var(--faint); letter-spacing:.04em; text-transform:none; font-weight:700; }
+.oc-sub .pre { font-size:11px; color:var(--faint); font-weight:700; letter-spacing:.04em; }
