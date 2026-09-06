@@ -106,7 +106,28 @@ for y in years:
     q = sorted(((r['price'], r['player']) for r in D if r['year'] == y and pos(r) == 'QB'), reverse=True)[:2]
     qbTop.append({"year": y, "top": [{"name": n, "price": p} for p, n in q]})
 
+# what this league has paid for each player, every year he was rostered (keepers included,
+# flagged) -- keyed the way the front-end normalises names (letters and spaces, suffix dropped)
+import re
+NAME_FIX = {"puka nakua": "puka nacua"}
+SUFFIX = {"jr", "sr", "ii", "iii", "iv", "v"}
+def jskey(name):
+    k = re.sub(r"\s+", " ", re.sub(r"[^a-z ]", "", str(name).lower())).strip()
+    k = NAME_FIX.get(k, k)
+    parts = k.split()
+    while parts and parts[-1] in SUFFIX:
+        parts.pop()
+    return " ".join(parts)
+history = {}
+for r in (dict(x) for x in con.execute("select * from drafts")):
+    history.setdefault(jskey(r['player']), []).append({
+        "y": r['year'], "p": r['price'], "o": OWNER_TEAM.get(r['owner'], r['owner']), "k": bool(r['is_keeper']),
+        "pts": round(r['pts_ppr']) if r['pts_ppr'] is not None else None, "rk": r['rk_ppr'], "gp": round(r['gp']) if r['gp'] else None})
+for k in history:
+    history[k].sort(key=lambda x: -x['y'])
+
 payload = {"generated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+           "history": history,
            "years": years, "recent": recent,
            "share": share(recent), "shareEarly": share([y for y in years if y < RECENT]),
            "ladder": ladder, "ladderFull": ladderFull, "kdst": kdst, "topHeavy": topHeavy, "dollarHits": hits, "bust": bust,

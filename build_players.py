@@ -676,6 +676,7 @@ def main():
     for rec in out:
         rk, so = experience_flags(expc.get(str(rec["id"])))
         rec["rookie"], rec["soph"] = rk, so
+        rec["yrs"] = (expc.get(str(rec["id"])) or {}).get("years")
         rec.pop("id", None)
     print("rookies:", sum(1 for r in out if r["rookie"]), "| second-year:", sum(1 for r in out if r["soph"]))
     blend(out, read_sources({norm(p["name"]): p["pos"] for p in out}))

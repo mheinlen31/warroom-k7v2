@@ -51,7 +51,10 @@
     expanded.has(n) ? expanded.delete(n) : expanded.add(n);
     const det = tr.nextElementSibling;
     const open = isOpen(n);
-    if (det && det.classList.contains('det')) det.hidden = !open;
+    if (det && det.classList.contains('det')) {
+      if (open && !det.querySelector('.dhead')) { const p = R && R.avail.find((x) => x.name === n); if (p) det.querySelector('.det-in').innerHTML = detailHtml(p); }
+      det.hidden = !open;
+    }
     tr.classList.toggle('open', open);
   });
   $('sort-btn').addEventListener('click', () => {
@@ -101,6 +104,53 @@
   const INJ_LABEL = { Q: 'Q', D: 'Dbt', OUT: 'Out', IR: 'IR', SUSP: 'Susp', PUP: 'PUP', DAY_TO_DAY: 'DTD', QUESTIONABLE: 'Q' };
   const injHtml = (p) => !p.inj ? '' : `<span class="inj${p.inj === 'Q' || p.inj === 'QUESTIONABLE' || p.inj === 'DAY_TO_DAY' ? ' q' : ''}">${esc(INJ_LABEL[p.inj] || (p.inj[0] + p.inj.slice(1, 3).toLowerCase()))}</span>`
     + (p.games != null && p.games < 17 ? `<span class="inj games" title="projection scaled to ${p.games} games">~${p.games} gm</span>` : '');
+  /* The dossier behind a collapsed row: everything we know about him, in
+     labelled lines. Built on demand from the pool, the model, the league's
+     draft history, tonight's room and your own roster. */
+  const SUFFIX_RE = /\s+(jr|sr|ii|iii|iv|v)$/;
+  const histKey = (name) => E.normName(name).replace(SUFFIX_RE, '');
+  const poolByName = (() => { const m = {}; (window.GUIDE_PLAYERS.players || []).forEach((p) => { m[E.normName(p.name)] = p; }); return m; })();
+  function detailHtml(p) {
+    const L = [];
+    const line = (label, html) => { if (html) L.push(`<div class="dl"><b>${label}</b><span>${html}</span></div>`); };
+    const myT = (state && state.teams || []).find((t) => t.name === me);
+    const rosteredBy = {}; (state && state.teams || []).forEach((t) => (t.players || []).forEach((x) => { rosteredBy[E.normName(x.name)] = t.name; }));
+    // value
+    const repl = R.repl && R.repl[p.pos];
+    line('Value', [`proj <b>${p.proj ? p.proj.toFixed(0) : '—'}</b>${p.projFull ? ` (${p.projFull.toFixed(0)} full season, ~${p.games} games)` : ''}`,
+      p.vor > 0 && repl != null ? `+${p.vor.toFixed(0)} over the ${esc(p.pos)} you'd get for $1 (${Math.round(repl)})` : null,
+      p.tier ? `tier ${p.tier}${p.cliff ? ' · cliff after him' : ''}` : null].filter(Boolean).join(' · '));
+    // rankings
+    const cons = p.cons ? `composite ${esc(p.pos)}${p.compRank} · rank ${p.cons}${p.spread > 8 ? ` ±${p.spread}` : ''} · ${p.nsrc} src` : '';
+    line('Rankings', `${cons}${srcChips(p) ? ' ' + srcChips(p) : ''}${p.adp ? ` · ESPN ADP ${p.adp}` : ''}${p.aav ? ` · AAV $${p.aav}` : ''}${p.nrank > 1 && p.consEspn ? ` · ${p.nrank} ESPN rankers avg ${p.consEspn}` : ''}`);
+    // last season
+    const sl = statLine(p);
+    line('2025', sl ? `${sl}${p.fp25 && p.gp25 ? ` · <b>${(p.fp25 / p.gp25).toFixed(1)}</b>/g` : ''}` : '');
+    // this league's history
+    const h = (T && T.history && T.history[histKey(p.name)]) || [];
+    line('Paid here', h.length ? h.slice(0, 6).map((r) => `<b>${r.y}</b> $${r.p} ${esc(r.o || '')}${r.k ? ' <i class="kp">keeper</i>' : ''}${r.pts != null ? ` → ${r.pts} pts${r.rk ? `, ${esc(p.pos)}${r.rk}` : ''}` : ''}`).join(' · ') : (p.yrs > 1 ? 'never rostered in this league' : ''));
+    // tonight's room
+    const needs = (R.posNeeds && R.posNeeds[p.pos]) || [];
+    const must = needs.filter((n) => n.degree === 3 && n.name !== me), flex = needs.filter((n) => n.degree === 2 && n.name !== me);
+    const hunters = (p.contestBy || []).map((nm) => { const n = needs.find((x) => x.name === nm); return `${esc(nm)}${n ? ` <i>${esc(needLabel(n, p.pos))}</i>` : ''}`; });
+    line('Tonight', `room <b>$${p.mkt}</b> · ${p.bidders} can pay${hunters.length ? ` · hunted by ${hunters.join(', ')}` : ' · nobody hunting him'}${must.length ? ` · ${must.length} still need a ${esc(p.pos)} starter (${must.map((n) => esc(n.name) + (n.starters > 1 ? ' ×' + n.starters : '')).join(', ')})` : ''}${flex.length ? ` · ${flex.length} FLEX open` : ''}`);
+    // teammates at his position (depth-chart proxy)
+    if (p.pos === 'RB' || p.pos === 'WR' || p.pos === 'TE') {
+      const mates = (window.GUIDE_PLAYERS.players || []).filter((x) => x.nfl === p.nfl && x.pos === p.pos && x.name !== p.name && x.proj > 20)
+        .sort((a, b) => b.proj - a.proj).slice(0, 3);
+      line(`${esc(p.nfl || '')} ${esc(p.pos)}s`, mates.map((x) => `${esc(x.name)} ${x.proj.toFixed(0)}${rosteredBy[E.normName(x.name)] ? ` <i>${esc(rosteredBy[E.normName(x.name)])}</i>` : ''}`).join(' · '));
+    }
+    // you
+    let clash = '';
+    if (myT && p.bye) { const c = (myT.players || []).find((x) => x.pos === p.pos && (poolByName[E.normName(x.name)] || {}).bye === p.bye); if (c) clash = ` · <i class="warn">bye ${p.bye} clashes with your ${esc(c.name)}</i>`; }
+    line('You', p.payTo != null ? `pay up to <b>$${p.payTo}</b>${p.why ? ` · ${esc(p.why)}` : ''}${clash}` : '');
+    // news + outlook
+    const nh = newsHtml(p); if (nh) L.push(nh);
+    line('Outlook', p.outlook ? esc(p.outlook) : '');
+    const head = `<div class="dhead">${p.img ? `<img class="mug" src="${esc(p.img)}" alt="" loading="lazy" onerror="this.remove()">` : ''}<div><div class="dname">${esc(p.name)}${injHtml(p)}</div><div class="dsub">${esc(p.pos)} · ${esc(p.nfl || '')}${p.bye ? ` · bye ${p.bye}` : ''}${p.rookie ? ' · rookie' : p.soph ? ' · 2nd year' : p.yrs ? ` · year ${p.yrs + 1}` : ''}</div></div></div>`;
+    return head + L.join('');
+  }
+
   // list view: a cross when there's an injury concern (red: out / IR / suspended /
   // doubtful / missed games; amber: questionable or day-to-day)
   const injFlag = (p) => {
@@ -468,11 +518,7 @@
         <td class="you${p.payTo > p.model ? ' up' : p.payTo < p.model ? ' down' : ''}">${you}</td>
         <td class="mkt">${money(p.mkt)}${edgeHtml(p.edge)}</td>
       </tr>
-      <tr class="det" data-n="${esc(p.name)}"${open ? '' : ' hidden'}><td colspan="6"><div class="det-in">
-        <div class="meta">${byeTag(p)}${yearTag(p)}${injHtml(p)}<span>proj ${p.proj ? p.proj.toFixed(0) : '—'}${p.projFull ? ` <i class="dim">(${p.projFull.toFixed(0)} full season)</i>` : ''}</span>${cons ? `<span>${cons}</span>` : ''}${srcChips(p)}<span>${p.bidders} can pay</span>${p.tier ? `<span>tier ${p.tier}${p.cliff ? ' · cliff after him' : ''}</span>` : ''}</div>
-        <div class="meta2">${statLine(p)}</div>${newsHtml(p)}
-        ${p.why ? `<div class="why"><b>Your number ${you}</b> · ${esc(p.why)}</div>` : ''}
-      </div></td></tr>`;
+      <tr class="det" data-n="${esc(p.name)}"${open ? '' : ' hidden'}><td colspan="6"><div class="det-in">${open ? detailHtml(p) : ''}</div></td></tr>`;
     }).join('');
     $('board').innerHTML = (byPosView ? ladderHint(tab) : '') + `<table class="list">
       <thead><tr><th></th><th class="l">#</th><th class="l">Player</th>

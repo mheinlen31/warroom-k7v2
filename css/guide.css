@@ -319,3 +319,16 @@ table.list td.model, table.list td.you, table.list td.mkt, table.list td.rk, tab
   table.list .plx .tag.tm { display:none; }
   table.list .plx .tag { font-size:9px; }
 }
+
+/* ---- the dossier ---- */
+.dhead { display:flex; align-items:center; gap:10px; margin:2px 0 6px; }
+.mug { width:42px; height:42px; border-radius:50%; object-fit:cover; object-position:top; background:#0a1120; border:1px solid var(--line2); flex:0 0 auto; }
+.dname { font-family:var(--display); font-weight:800; font-size:16px; text-transform:uppercase; letter-spacing:.02em; }
+.dsub { font-size:11px; color:var(--faint); letter-spacing:.04em; margin-top:1px; }
+.dl { display:flex; gap:8px; font-size:11.5px; color:var(--soft); line-height:1.5; margin-top:3px; }
+.dl > b { flex:0 0 62px; font-family:var(--data); font-size:9px; font-weight:800; letter-spacing:.14em; text-transform:uppercase; color:var(--faint); padding-top:2px; }
+.dl > span { min-width:0; } .dl > span b { color:var(--ink); } .dl > span i { font-style:normal; color:#ffb35c; } .dl > span i.kp { color:var(--gold); font-size:9.5px; letter-spacing:.06em; text-transform:uppercase; font-weight:800; }
+.dl > span i.warn { color:#ffb35c; }
+.dl .src { color:var(--gold); font-weight:700; margin-left:4px; } .dl .src.espn { color:var(--soft); }
+.det-in .news { margin-top:5px; }
+@media (max-width:640px) { .dl { flex-direction:column; gap:1px; } .dl > b { flex:none; } }
