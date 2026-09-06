@@ -147,7 +147,7 @@
     // news + outlook
     const nh = newsHtml(p); if (nh) L.push(nh);
     line('Outlook', p.outlook ? esc(p.outlook) : '');
-    const head = `<div class="dhead">${p.img ? `<img class="mug" src="${esc(p.img)}" alt="" loading="lazy" onerror="this.remove()">` : ''}<div><div class="dname">${esc(p.name)}${injHtml(p)}</div><div class="dsub">${esc(p.pos)} · ${esc(p.nfl || '')}${p.bye ? ` · bye ${p.bye}` : ''}${p.rookie ? ' · rookie' : p.soph ? ' · 2nd year' : p.yrs ? ` · year ${p.yrs + 1}` : ''}</div></div></div>`;
+    const head = `<div class="dhead">${p.img ? `<img class="mug" src="${esc(p.img)}" alt="" loading="lazy" onerror="this.remove()">` : ''}<div><div class="dname">${esc(p.name)}${injHtml(p)}</div><div class="dsub">${esc(p.pos)} · ${esc(p.nfl || '')}${p.bye ? ` · bye ${p.bye}` : ''}${p.rookie ? ' · rookie' : p.soph ? ' · 2nd year' : p.yrs ? ` · year ${p.yrs}` : ''}</div></div></div>`;
     return head + L.join('');
   }
 
