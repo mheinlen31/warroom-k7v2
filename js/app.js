@@ -463,7 +463,7 @@
       return head + `<tr class="row${p.cliff && byPosView ? ' cliff' : ''}${watch.has(p.name) ? ' watched' : ''}${open ? ' open' : ''}" data-n="${esc(p.name)}">
         <td class="w"><button type="button" class="star${watch.has(p.name) ? ' on' : ''}" data-w="${esc(p.name)}" title="Watch list">★</button></td>
         <td class="rk">${byPosView ? p.compRank : i + 1}</td>
-        <td class="pl"><span class="nm">${esc(p.name)}</span><span class="tag ${posClass(p.pos)}">${esc(p.pos)}${byPosView ? '' : p.compRank}</span>${p.nfl ? `<span class="tag tm">${esc(p.nfl)}</span>` : ''}${injFlag(p)}</td>
+        <td class="pl"><div class="plx"><span class="nm">${esc(p.name)}</span>${injFlag(p)}<span class="tag ${posClass(p.pos)}">${esc(p.pos)}${byPosView ? '' : p.compRank}</span>${p.nfl ? `<span class="tag tm">${esc(p.nfl)}</span>` : ''}</div></td>
         <td class="model">${money(p.model)}</td>
         <td class="you${p.payTo > p.model ? ' up' : p.payTo < p.model ? ' down' : ''}">${you}</td>
         <td class="mkt">${money(p.mkt)}${edgeHtml(p.edge)}</td>

@@ -307,3 +307,15 @@ table.list tr.det td { padding:0 8px 9px 40px; background:rgba(255,255,255,.03);
 .why { font-size:11px; color:var(--soft); margin-top:5px; line-height:1.4; } .why b { color:var(--gold); }
 #expand-btn { white-space:nowrap; }
 @media (max-width:640px) { table.list td.pl .nm { font-size:14px; } table.list td.model { font-size:16px; } table.list tr.det td { padding-left:24px; } }
+
+/* the name is the only thing allowed to truncate; the cross and tags always show */
+table.list td.pl { overflow:visible; }
+table.list .plx { display:flex; align-items:baseline; gap:7px; min-width:0; }
+table.list .plx .nm { flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+table.list .plx .tag, table.list .plx .cross { flex:0 0 auto; margin-left:0; }
+table.list td.model, table.list td.you, table.list td.mkt, table.list td.rk, table.list td.w { width:1%; white-space:nowrap; }
+@media (max-width:640px) {
+  table.list td.model, table.list td.you, table.list td.mkt { padding-left:5px; padding-right:5px; }
+  table.list .plx .tag.tm { display:none; }
+  table.list .plx .tag { font-size:9px; }
+}
