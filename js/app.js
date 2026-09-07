@@ -10,6 +10,19 @@
   const posClass = (p) => 'pos-' + String(p).replace('/', '');
 
   let me = localStorage.getItem('sfg-me') || 'Silent Pugios';
+  // three views under the clock; the clock panel and its mini strip show in all of them
+  const VIEWS = ['board', 'mine', 'room'];
+  let view = VIEWS.includes(localStorage.getItem('sfg-view')) ? localStorage.getItem('sfg-view') : 'board';
+  function applyView() {
+    document.body.dataset.view = view;
+    document.querySelectorAll('#views button').forEach((b) => b.classList.toggle('on', b.dataset.v === view));
+  }
+  document.getElementById('views').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-v]'); if (!b) return;
+    view = b.dataset.v; try { localStorage.setItem('sfg-view', view); } catch (err) { /* private mode */ }
+    applyView(); window.scrollTo({ top: 0 });
+  });
+  applyView();
   // display names: the long ones break layouts on a phone; the real name stays the key everywhere
   const SHORT = { 'AFRESHAYPEPPER ASAYWHEN': 'Pep' };
   const tn = (name) => SHORT[name] || name || '';
@@ -243,7 +256,9 @@
           </div>`; }).join('')}</div>
       </div>`;
     $('cockpit').innerHTML = league + scar;
+    seatCardHtml = seat;
   }
+  let seatCardHtml = '';
 
   /* One line of the numbers you need while a player is up: your money, your
      open spots, who's nominating. Sits right above the rankings. */
@@ -285,8 +300,7 @@
        shopping list. Nominate them early and let other budgets bleed.
      - ROSTER: your lineup taking shape, slot by slot. */
   function renderPlan() {
-    const box = $('cockpit2');
-    if (!R || !R.me || !state) { box.innerHTML = ''; return; }
+    if (!R || !R.me || !state) { $('mine').innerHTML = ''; $('roomcards').innerHTML = ''; return; }
     const me_ = R.me;
     const meT = (state.teams || []).find((t) => t.name === me);
     const st = meT ? E.teamState(meT) : null;
@@ -378,7 +392,8 @@
         <span class="nwt">${p.newsNote ? esc(p.newsNote) : p.news ? esc(p.news.note) : ''}</span></div>`).join('')
         : '<div class="fact">Nobody who matters is on the report.</div>'}
     </div>`;
-    box.innerHTML = plan + nomCard + drainCard + flierCard + roster + budgets + rostersCard + newsCard;
+    $('mine').innerHTML = seatCardHtml + plan + nomCard + drainCard + flierCard + roster;
+    $('roomcards').innerHTML = budgets + rostersCard + newsCard;
   }
 
   function renderTargets() {
@@ -537,7 +552,7 @@
     }
     if (tab !== 'WATCH') $('count').textContent = showAll ? `${rows.length} shown · ${rows.filter((p) => !p.gone).length} available` : `${rows.length} available`;
     $('sort-btn').hidden = tab !== 'ALL' || !!q;
-    $('sort-btn').textContent = 'Sort: ' + ({ rank: 'Rank', model: 'Model', edge: 'Edge', you: 'You' })[sortMode];
+    $('sort-btn').textContent = 'Sort: ' + ({ rank: 'Rank', model: 'Value', edge: 'Edge', you: 'You' })[sortMode];
     if (!rows.length) { $('board').innerHTML = '<div class="empty">nobody matches</div>'; return; }
     const byPosView = tab !== 'ALL' && !q;
     let lastTier = 0;
@@ -569,7 +584,7 @@
     }).join('');
     $('board').innerHTML = (byPosView ? ladderHint(tab) : '') + `<table class="list">
       <thead><tr><th></th><th class="l">#</th><th class="l">Player</th>
-        <th>Model</th><th title="your number: what he's worth to your roster, inside your max">You</th><th>Mkt</th></tr></thead>
+        <th title="what he's worth to a lineup in this league">Value</th><th title="your number: what he's worth to your roster, inside your max">You</th><th title="what the room is likely to pay tonight">Room</th></tr></thead>
       <tbody>${body}</tbody></table>` + soldHtml;
     $('expand-btn').textContent = expandAll ? 'Collapse all' : 'Expand all';
     const wt = document.querySelector('.tab[data-t="WATCH"]'); if (wt) wt.innerHTML = tabLabel('WATCH');

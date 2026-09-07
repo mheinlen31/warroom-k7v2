@@ -12,7 +12,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@600;700;800&family=Saira:wght@500;600;700&display=swap">
-<link rel="stylesheet" href="css/guide.css?v=20260907082503">
+<link rel="stylesheet" href="css/guide.css?v=20260907084942">
 </head>
 <body>
 <header class="top">
@@ -23,9 +23,16 @@
 <section class="onclock" id="onclock" hidden></section>
 <div class="oc-mini" id="oc-mini" hidden></div>
 
-<section class="seat" id="seat"></section>
-<nav class="tabs" id="tabs"></nav>
-<div class="tools">
+<!-- three views under the clock: the rankings, your draft, the room -->
+<nav class="views" id="views">
+  <button type="button" data-v="board" class="on">Board</button>
+  <button type="button" data-v="mine">My draft</button>
+  <button type="button" data-v="room">The room</button>
+</nav>
+
+<section class="seat v-board" id="seat"></section>
+<nav class="tabs v-board" id="tabs"></nav>
+<div class="tools v-board">
   <input id="q" type="search" placeholder="Find a player…" autocomplete="off">
   <button id="sort-btn" class="dm" type="button" hidden>Sort: Rank</button>
   <button id="expand-btn" class="dm" type="button">Expand all</button>
@@ -33,21 +40,22 @@
   <span class="count" id="count"></span>
 </div>
 
-<main id="board"></main>
+<main id="board" class="v-board"></main>
 
-<section class="recent" id="recent"></section>
+<section class="recent v-board" id="recent"></section>
 
-<section class="cockpit" id="cockpit"></section>
+<!-- my draft: seat, plan, best value, nominate now, drain, fliers, roster -->
+<section class="cockpit v-mine" id="mine"></section>
+<section class="targets v-mine" id="targets"></section>
 
-<section class="cockpit" id="cockpit2"></section>
-
-<section class="targets" id="targets"></section>
-
-<section class="trends" id="trends"></section>
+<!-- the room: money, scarcity, budgets, rosters, news, tendencies -->
+<section class="cockpit v-room" id="cockpit"></section>
+<section class="cockpit v-room" id="roomcards"></section>
+<section class="trends v-room" id="trends"></section>
 
 <footer class="how">
   <h3>How the numbers work</h3>
-  <p><b>Model $</b> is value over replacement. For each position the model counts
+  <p><b>Value $</b> (the Value column) is value over replacement. For each position the model counts
   every unfilled starting slot in the league (plus a share of FLEX and bench
   demand), finds the player you'd get for nothing at that depth — the
   <em>replacement level</em> — and values everyone by projected points above him.
@@ -85,11 +93,11 @@
   <em>spread</em> is how far those rankers disagree.</p>
 </footer>
 
-<script src="js/players.js?v=20260907082503"></script>
-<script src="js/engine.js?v=20260907082503"></script>
-<script src="js/trends.js?v=20260907082503"></script>
-<script src="js/live.js?v=20260907082503"></script>
-<script src="js/model.js?v=20260907082503"></script>
-<script src="js/app.js?v=20260907082503"></script>
+<script src="js/players.js?v=20260907084942"></script>
+<script src="js/engine.js?v=20260907084942"></script>
+<script src="js/trends.js?v=20260907084942"></script>
+<script src="js/live.js?v=20260907084942"></script>
+<script src="js/model.js?v=20260907084942"></script>
+<script src="js/app.js?v=20260907084942"></script>
 </body>
 </html>

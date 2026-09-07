@@ -168,7 +168,7 @@ tr.onclock td { background:rgba(224,27,36,.12); box-shadow:inset 3px 0 0 var(--r
 .oc-foot i.avoid { color:#8ff0bb; background:rgba(53,208,127,.16); }
 
 /* ---------------- plan / drain / roster ---------------- */
-#cockpit2 { padding-top:8px; }
+
 table.plan { width:100%; border-collapse:collapse; }
 table.plan td { padding:4px 4px; border-bottom:1px solid rgba(36,48,74,.5); font-size:12.5px; background:transparent; text-align:left; }
 table.plan .ps { font-weight:800; letter-spacing:.08em; font-size:10px; width:52px; }
@@ -212,7 +212,7 @@ table.rb .tn { font-family:var(--display); font-weight:700; font-size:13.5px; te
 table.rb .tl { font-family:var(--display); font-weight:800; font-size:15px; color:var(--gold); text-align:right; }
 table.rb .tm, table.rb .to { color:var(--soft); text-align:right; font-size:11px; }
 table.rb tr.me td { background:rgba(255,201,74,.07); }
-@media (min-width:760px) { #cockpit2 { grid-template-columns:repeat(4, minmax(0,1fr)); } #cockpit2 .card.wide2 { grid-column:span 2; } }
+@media (min-width:760px) { #mine, #roomcards { grid-template-columns:repeat(4, minmax(0,1fr)); } #mine .card.wide2, #roomcards .card.wide2 { grid-column:span 2; } }
 
 /* ---------------- 2025 line, bye, year badges ---------------- */
 .meta2 { font-size:10.5px; color:var(--faint); margin-top:3px; white-space:normal; }
@@ -379,4 +379,22 @@ table.list .plx::after { display:none; }
   table.list .plx .tags { flex:1 1 100%; gap:6px; margin-top:-1px; }
   table.list .plx .tags .tag { margin-left:0; }
   table.list tr.row td { padding-top:4px; padding-bottom:4px; }
+}
+
+/* ---- views: board / my draft / the room ---- */
+.views { display:flex; gap:6px; padding:10px 12px 0; }
+.views button { flex:1 1 0; font:800 12px var(--display); letter-spacing:.12em; text-transform:uppercase; padding:9px 10px; border-radius:3px; border:1px solid var(--line2); background:var(--panel); color:var(--soft); cursor:pointer; }
+.views button.on { background:var(--gold); border-color:var(--gold); color:#1a1300; }
+@media (min-width:760px) { .views { max-width:560px; } }
+body[data-view="board"] .v-mine, body[data-view="board"] .v-room { display:none; }
+body[data-view="mine"] .v-board, body[data-view="mine"] .v-room { display:none; }
+body[data-view="room"] .v-board, body[data-view="room"] .v-mine { display:none; }
+#mine, #roomcards, #cockpit { padding-top:8px; }
+/* cards may never be wider than the screen: columns can shrink below content, long rows wrap on phones */
+.cockpit { grid-template-columns:minmax(0,1fr); }
+.card { min-width:0; }
+@media (max-width:640px) {
+  .dr { flex-wrap:wrap; row-gap:2px; }
+  .dr .drv { flex:1 1 100%; margin-left:0; white-space:normal; line-height:1.4; }
+  .tc { flex-wrap:wrap; } .tc .pr { white-space:normal; }
 }
