@@ -388,7 +388,7 @@
       <div class="tslot">
         <h5>${esc(t.slot)} · best value for you</h5>
         ${t.cands.length ? t.cands.map((p) => `
-          <div class="tc${p.stretch ? ' stretch' : ''}"><span class="nm">${esc(p.name)}${p.byeClash ? `<i class="clash" title="same bye as ${esc(p.byeClash)}">bye ${p.bye} · same as ${esc(p.byeClash.split(' ').pop())}</i>` : ''}${p.stretch ? '<i class="clash st">room price is over your max</i>' : ''}${p.contest === 0 ? '<i class="clash ok">clear path</i>' : p.contest >= 2 ? `<i class="clash ct">${p.contest} hunting · ${esc(p.contestBy.slice(0, 2).join(', '))}</i>` : ''}</span>
+          <div class="tc${p.stretch ? ' stretch' : ''}"><span class="nm">${esc(p.name)}${p.byeClash ? `<i class="clash" title="same bye as ${esc(p.byeClash)}">bye ${p.bye} · same as ${esc(p.byeClash.split(' ').pop())}</i>` : ''}${p.stretch ? '<i class="clash st">room price is over your max</i>' : ''}${p.contest === 0 ? '<i class="clash ok">clear path</i>' : p.contest >= 2 ? `<i class="clash ct">${p.contest} hunting · ${esc(p.contestBy.slice(0, 2).map(tn).join(', '))}</i>` : ''}</span>
             <span class="pr">${money(p.payTo)}<small>you · room ${money(p.mkt)}</small>${edgeHtml(p.youEdge)}</span></div>`).join('')
           : '<div class="tc"><span class="nm" style="color:var(--faint)">nobody left</span></div>'}
       </div>`).join('')}</div>`;
@@ -409,7 +409,7 @@
     const th = T.topHeavy, hits = T.dollarHits, k = T.kdst;
     const owners = T.owners.slice().sort((a, b) => Math.abs(b.tilt[b.lean]) - Math.abs(a.tilt[a.lean])).map((o) => {
       const v = o.tilt[o.lean];
-      return `<div class="ow"><b>${esc(o.team || o.owner)}</b>${o.team ? `<em>${esc(o.owner)}</em>` : ''}<span class="${v > 0 ? 'pos-edge' : 'neg-edge'}">${v > 0 ? 'chases' : 'avoids'} ${o.lean} ${v > 0 ? '+' : ''}${v}%</span>
+      return `<div class="ow"><b>${esc(tn(o.team || o.owner))}</b>${o.team ? `<em>${esc(o.owner)}</em>` : ''}<span class="${v > 0 ? 'pos-edge' : 'neg-edge'}">${v > 0 ? 'chases' : 'avoids'} ${o.lean} ${v > 0 ? '+' : ''}${v}%</span>
         <small>${o.big} pick${o.big === 1 ? '' : 's'} of $50+ · avg $${o.avg}</small></div>`;
     }).join('');
     $('trends').innerHTML = `
@@ -554,7 +554,7 @@
       const g = p.gone;
       // Show-all on a position tab orders by preseason rank, so # is the preseason rank there
       const rk = byPosView ? (showAll ? p.preRank : p.compRank) : i + 1;
-      const liveTag = g ? `<span class="tag gone ${g.keeper ? 'kept' : 'sold'}" title="${g.keeper ? 'kept' : 'sold'} · ${esc(g.team)} · $${g.cost}">${g.keeper ? 'KEPT' : 'SOLD'} ${esc(g.team)} $${g.cost}</span>`
+      const liveTag = g ? `<span class="tag gone ${g.keeper ? 'kept' : 'sold'}" title="${g.keeper ? 'kept' : 'sold'} · ${esc(tn(g.team))} · $${g.cost}">${g.keeper ? 'KEPT' : 'SOLD'} ${esc(tn(g.team))} $${g.cost}</span>`
         : `<span class="tag ${posClass(p.pos)}" title="${esc(p.pos)}${p.compRank} of the ${esc(p.pos)}s still available">${esc(p.pos)}${byPosView && !showAll ? '' : p.compRank}</span>`;
       const preTag = !g && p.preRank && p.preRank !== p.compRank && !(byPosView && showAll) ? `<span class="tag pre" title="preseason: ${esc(p.pos)}${p.preRank} with every player on the board">pre ${p.preRank}</span>` : '';
       return head + `<tr class="row${i % 2 ? ' alt' : ''}${g ? ' gone' : ''}${p.cliff && byPosView ? ' cliff' : ''}${watch.has(p.name) ? ' watched' : ''}${open ? ' open' : ''}" data-n="${esc(p.name)}">
