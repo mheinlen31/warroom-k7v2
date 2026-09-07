@@ -26,7 +26,17 @@ window.GuideModel = (function () {
                     'jason meyers': 'jason myers' };
   const norm = (n) => { const k = E.normName(n); return ALIASES[k] || k; };
 
-  function compute(pool, state, myName) {
+  // Your strategy, set from the My draft card: a QB you want and the most you'll
+  // pay before pivoting to fallbacks, a cap on what any remaining RB slot gets
+  // (one stud, then flyers), and a WR emphasis (plan the best receivers left,
+  // FLEX leans WR/TE). It shapes the plan, your numbers and the clock's advice.
+  function compute(pool, state, myName, strat) {
+    strat = strat || {};
+    const S_QB = strat.qbTarget ? norm(strat.qbTarget) : null;
+    const S_FB = (strat.qbFallbacks || []).filter(Boolean).map(norm);
+    const S_CEIL = +strat.qbCeiling > 0 ? +strat.qbCeiling : null;
+    const S_RB = +strat.rbCap > 0 ? +strat.rbCap : null;
+    const S_WR = !!strat.wrLean;
     // preseason positional rank: where he stood among ALL players at his position
     // before keepers and picks came off the board (composite order over the whole
     // pool). Fixed for the night, so compute it once and stamp the pool.
@@ -306,27 +316,44 @@ window.GuideModel = (function () {
       // money "your number" may spend above lineup value.
       const BENCH_EACH = 2;
       const planBudget = st.remaining - benchOpenN * BENCH_EACH;
-      const planRows = starterOpen.slice().sort((a, b) => (a.id === 'FLEX') - (b.id === 'FLEX')).map((sl) => ({
-        id: sl.id, slot: sl.label, idx: 1, pick: null,
-        list: avail.filter((p) => sl.takes.includes(p.pos) && p.vor > 0 && E.canRoster(t, p.pos).ok)
-          .sort((a, b) => b.model - a.model || b.proj - a.proj) }));
+      // what the plan pencils in for a player: his value, or your ceiling for your QB
+      // ...and for a fallback QB, what the room will actually charge (a plan B has to be bought, not valued)
+      const qbGone = !!(S_QB && !avail.some((p) => norm(p.name) === S_QB));
+      const planPrice = (p) => (S_QB && S_CEIL && norm(p.name) === S_QB) ? Math.min(S_CEIL, p.model)
+        : (S_FB.includes(norm(p.name)) ? Math.max(p.model, p.mkt) : p.model);
+      const planRows = starterOpen.slice().sort((a, b) => (a.id === 'FLEX') - (b.id === 'FLEX')).map((sl) => {
+        let list = avail.filter((p) => sl.takes.includes(p.pos) && p.vor > 0 && E.canRoster(t, p.pos).ok);
+        // one stud, then flyers: remaining RB money is capped, in the RB slots and in FLEX
+        if (S_RB) list = list.filter((p) => p.pos !== 'RB' || p.model <= S_RB);
+        list.sort((a, b) => planPrice(b) - planPrice(a) || b.proj - a.proj);
+        let idx = 1;
+        if (sl.takes[0] === 'QB' && sl.takes.length === 1 && (S_QB || S_FB.length)) {
+          // your QB first, then the fallbacks in order, then everyone else
+          const rank = (p) => norm(p.name) === S_QB ? 0 : (S_FB.indexOf(norm(p.name)) + 1 || 99);
+          list.sort((a, b) => rank(a) - rank(b) || planPrice(b) - planPrice(a));
+          idx = 0;
+        }
+        if (S_WR && sl.takes.includes('WR') && sl.id !== 'FLEX') idx = 0;          // load up: plan the best receivers left
+        if (S_WR && sl.id === 'FLEX') list.sort((a, b) => ((a.pos === 'RB') - (b.pos === 'RB')) || planPrice(b) - planPrice(a) || b.proj - a.proj);
+        return { id: sl.id, slot: sl.label, idx, pick: null, list };
+      });
       const settle = () => planRows.forEach((r) => {
         const others = new Set(planRows.filter((o) => o !== r).map((o) => o.pick && o.pick.name).filter(Boolean));
         const free = r.list.filter((c) => !others.has(c.name));
         r.pick = free[Math.min(r.idx, free.length - 1)] || null;
       });
       settle();
-      const planTotal = () => planRows.reduce((s, r) => s + (r.pick ? r.pick.model : 1), 0);
+      const planTotal = () => planRows.reduce((s, r) => s + (r.pick ? planPrice(r.pick) : 1), 0);
       let guard = 0;
       while (planTotal() > planBudget && guard++ < 80) {
-        const cand = planRows.filter((r) => r.pick && r.idx + 1 < r.list.length).sort((a, b) => b.pick.model - a.pick.model)[0];
+        const cand = planRows.filter((r) => r.pick && r.idx + 1 < r.list.length).sort((a, b) => planPrice(b.pick) - planPrice(a.pick))[0];
         if (!cand) break;
         cand.idx += 1; settle();
       }
       const planStarters = planTotal(), planBench = benchOpenN * BENCH_EACH;
       const plan = {
         rows: starterOpen.map((sl) => { const r = planRows.find((x) => x.id === sl.id);
-          return { id: sl.id, slot: sl.label, target: r.pick ? r.pick.model : 1, who: r.pick ? r.pick.name : '—' }; }),
+          return { id: sl.id, slot: sl.label, target: r.pick ? planPrice(r.pick) : 1, who: r.pick ? r.pick.name : '—' }; }),
         bench: planBench, benchEach: BENCH_EACH, benchOpen: benchOpenN,
         total: planStarters + planBench, cushion: st.remaining - planStarters - planBench, fits: planStarters <= planBudget,
       };
@@ -383,7 +410,13 @@ window.GuideModel = (function () {
         if (cl) { num *= 0.96; bits.push(`shares bye ${p.bye} with ${cl.name}`); }
         let payTo = Math.round(Math.min(st.maxBid, num));   // max bid already keeps $1 for every other spot
         if (p.pos === 'K' || p.pos === 'D/ST') payTo = Math.min(payTo, 3);
+        // strategy overrides: your ceiling on your QB; flyer money on any other RB
+        if (S_QB && S_CEIL && norm(p.name) === S_QB) { payTo = Math.min(st.maxBid, S_CEIL); bits.push(`your ceiling is $${S_CEIL} — past it, pivot`); }
+        else if (S_RB && p.pos === 'RB' && payTo > S_RB) { payTo = S_RB; bits.push(`one stud, then flyers: RB money capped at $${S_RB}`); }
+        else if (S_FB.includes(norm(p.name)) && qbGone && payTo < Math.min(st.maxBid, p.mkt)) { payTo = Math.min(st.maxBid, p.mkt); bits.push(`your plan B at QB now that ${strat.qbTarget} is gone — pay the going rate`); }
         p.payTo = Math.max(st.maxBid >= 1 ? 1 : 0, payTo);
+        p.isQbTarget = !!(S_QB && norm(p.name) === S_QB);
+        p.isQbFallback = S_FB.includes(norm(p.name));
         if (p.payTo === st.maxBid && num > st.maxBid) bits.push('capped by your max bid');
         p.why = bits.join(' · ');
       });
@@ -432,7 +465,13 @@ window.GuideModel = (function () {
           return { ...p, cuff: !!cuffFor, tags, upside };
         })
         .sort((a, b) => b.upside - a.upside).slice(0, 8);
-      me = { name: t.name, remaining: st.remaining, maxBid: st.maxBid, open: st.open, nominateNow, fliers,
+      // the QB plan in words, for the card and the clock
+      const qbTargetP = S_QB ? avail.find((p) => norm(p.name) === S_QB) : null;
+      const qbFallP = S_FB.map((k) => avail.find((p) => norm(p.name) === k)).filter(Boolean);
+      const strategy = { qbTarget: qbTargetP ? { name: qbTargetP.name, price: qbTargetP.payTo, model: qbTargetP.model, mkt: qbTargetP.mkt } : null,
+        qbTargetGone: !!(S_QB && !qbTargetP), qbFallbacks: qbFallP.map((p) => ({ name: p.name, price: p.payTo, mkt: p.mkt })),
+        rbCap: S_RB, wrLean: S_WR, ceiling: S_CEIL };
+      me = { name: t.name, remaining: st.remaining, maxBid: st.maxBid, open: st.open, nominateNow, fliers, strategy,
              tax: st.tax, needs: openSlots.map((sl) => sl.label), targets,
              avgPerOpen: st.avgPerOpen, benchOpen: benchOpenN, plan, richness, leagueAvg };
     }

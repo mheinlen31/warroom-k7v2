@@ -420,3 +420,16 @@ body[data-view="room"] .v-board, body[data-view="room"] .v-mine { display:none; 
 .seat-liq b.hot em { color:#ffb35c; }
 table.rb .tb { color:var(--soft); text-align:right; font-size:11px; white-space:nowrap; } table.rb .tb.low { color:#ffb35c; } table.rb .tb.none { color:var(--red); }
 @media (max-width:640px) { .seat-liq { flex:1 1 100%; } .seat-up { font-size:12px; } }
+
+/* ---- your strategy ---- */
+.card.strat { border-color:rgba(255,201,74,.35); }
+.sline { font-size:12.5px; color:var(--soft); line-height:1.5; margin-top:3px; } .sline > b:first-child { font-family:var(--data); font-size:9.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--gold); margin-right:6px; }
+.sline b { color:var(--ink); } .sline .dim { color:var(--faint); margin:0 4px; }
+.sform { display:flex; flex-wrap:wrap; gap:8px 12px; margin-top:10px; padding-top:8px; border-top:1px solid rgba(36,48,74,.6); }
+.sform label { display:flex; flex-direction:column; gap:3px; font-size:9.5px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; color:var(--faint); }
+.sform input { background:#0a1120; color:var(--ink); border:1px solid var(--line2); border-radius:3px; padding:6px 8px; font:600 13px var(--data); width:150px; }
+.sform input[type=number] { width:80px; }
+.sform label.chk { flex-direction:row; align-items:center; gap:6px; align-self:flex-end; padding-bottom:8px; } .sform label.chk input { width:auto; }
+.oc-plan { margin-top:8px; padding:8px 12px; border-radius:4px; background:rgba(255,201,74,.10); border:1px solid rgba(255,201,74,.3); font-size:13px; color:var(--soft); line-height:1.45; }
+.oc-plan b { color:var(--ink); } .oc-plan > b:first-child { color:var(--gold); font-size:10px; letter-spacing:.14em; text-transform:uppercase; margin-right:6px; } .oc-plan small { color:var(--faint); }
+@media (max-width:640px) { .sform input { width:130px; } }

@@ -10,6 +10,11 @@
   const posClass = (p) => 'pos-' + String(p).replace('/', '');
 
   let me = localStorage.getItem('sfg-me') || 'Silent Pugios';
+  // your strategy, editable from the My draft card and remembered on the device
+  const STRAT_DEFAULT = { qbTarget: 'Josh Allen', qbCeiling: '', qbFallbacks: ['Dak Prescott', 'Justin Herbert'], rbCap: 10, wrLean: true };
+  let strategy = STRAT_DEFAULT;
+  try { const saved = JSON.parse(localStorage.getItem('sfg-strategy') || 'null'); if (saved && typeof saved === 'object') strategy = { ...STRAT_DEFAULT, ...saved }; } catch (e) { /* keep defaults */ }
+  const saveStrategy = () => { try { localStorage.setItem('sfg-strategy', JSON.stringify(strategy)); } catch (e) { /* private mode */ } };
   // three views under the clock; the clock panel and its mini strip show in all of them
   const VIEWS = ['board', 'mine', 'room'];
   let view = VIEWS.includes(localStorage.getItem('sfg-view')) ? localStorage.getItem('sfg-view') : 'board';
@@ -418,7 +423,31 @@
         <span class="nwt">${p.newsNote ? esc(p.newsNote) : p.news ? esc(p.news.note) : ''}</span></div>`).join('')
         : '<div class="fact">Nobody who matters is on the report.</div>'}
     </div>`;
-    $('mine').innerHTML = seatCardHtml + plan + nomCard + drainCard + flierCard + roster;
+    // ---- strategy card ----
+    const sg = me_.strategy || {};
+    const qbLine = sg.qbTarget ? `<b>${esc(sg.qbTarget.name)}</b> to <b>$${sg.qbTarget.price}</b>${sg.ceiling ? ' (your ceiling)' : ' (your number — set a ceiling below)'}${sg.qbFallbacks.length ? ` · past that: ${sg.qbFallbacks.map((f) => `${esc(f.name)} $${f.price} <small>(room $${f.mkt})</small>`).join(' / ')}` : ''}`
+      : sg.qbTargetGone ? `<b>${esc(strategy.qbTarget)}</b> is gone${sg.qbFallbacks.length ? ` · plan B: ${sg.qbFallbacks.map((f) => `${esc(f.name)} $${f.price} <small>(room $${f.mkt})</small>`).join(' / ')}` : ''}` : 'no QB target set';
+    const qbNames = (R.byPos.QB || []).slice(0, 24).map((p) => `<option value="${esc(p.name)}">`).join('');
+    const stratCard = `<div class="card strat">
+      <h4>Your strategy · shapes the plan, your numbers and the clock</h4>
+      <div class="sline"><b>QB</b> ${qbLine}</div>
+      <div class="sline"><b>RB</b> ${sg.rbCap ? `one stud, then flyers — remaining RB money capped at <b>$${sg.rbCap}</b>` : 'no cap'} <span class="dim">·</span> <b>WR</b> ${sg.wrLean ? 'load up: plan the best receivers left, FLEX leans WR/TE' : 'balanced'}</div>
+      <form class="sform" id="strat-form" autocomplete="off">
+        <label>QB target <input name="qbTarget" list="qb-list" value="${esc(strategy.qbTarget || '')}"></label>
+        <label>Ceiling $ <input name="qbCeiling" type="number" min="1" inputmode="numeric" value="${esc(strategy.qbCeiling || '')}" placeholder="${sg.qbTarget ? sg.qbTarget.model : ''}"></label>
+        <label>Fallback <input name="fb1" list="qb-list" value="${esc((strategy.qbFallbacks || [])[0] || '')}"></label>
+        <label>Fallback <input name="fb2" list="qb-list" value="${esc((strategy.qbFallbacks || [])[1] || '')}"></label>
+        <label>RB cap $ <input name="rbCap" type="number" min="0" inputmode="numeric" value="${esc(strategy.rbCap || '')}" placeholder="off"></label>
+        <label class="chk"><input name="wrLean" type="checkbox"${strategy.wrLean ? ' checked' : ''}> load up on WR</label>
+        <datalist id="qb-list">${qbNames}</datalist>
+      </form>
+    </div>`;
+    $('mine').innerHTML = stratCard + seatCardHtml + plan + nomCard + drainCard + flierCard + roster;
+    $('strat-form').addEventListener('change', (e) => {
+      const f = e.currentTarget;
+      strategy = { qbTarget: f.qbTarget.value.trim(), qbCeiling: f.qbCeiling.value, qbFallbacks: [f.fb1.value.trim(), f.fb2.value.trim()], rbCap: f.rbCap.value === '' ? '' : +f.rbCap.value, wrLean: f.wrLean.checked };
+      saveStrategy(); render();
+    });
     $('roomcards').innerHTML = budgets + rostersCard + newsCard;
   }
 
@@ -675,6 +704,10 @@
     else { verdict = `Past your number — <b>$${payTo}</b> for you${p.model > payTo ? ` (worth $${p.model} to a lineup, less to your roster)` : ''}`; cls = 'stop'; }
     const why = meCan.ok && p.why ? `<div class="oc-why">${esc(p.why)}</div>` : '';
     const alts = R.byPos[p.pos].filter((x) => x !== p && x.vor > 0).slice(0, 3);
+    const sg = R.me && R.me.strategy;
+    const planLine = sg && p.isQbTarget ? `<div class="oc-plan"><b>Your plan:</b> in on him to <b>$${p.payTo}</b>${sg.ceiling ? ' (your ceiling)' : ''}${sg.qbFallbacks.length ? ` · past that, pivot to ${sg.qbFallbacks.map((f) => `${esc(f.name)} <b>$${f.price}</b> <small>room $${f.mkt}</small>`).join(' or ')}` : ''}</div>`
+      : sg && p.isQbFallback ? `<div class="oc-plan"><b>Your plan:</b> plan B at QB${sg.qbTarget ? ` while ${esc(sg.qbTarget.name)} is still on the board` : ` — ${esc(strategy.qbTarget || 'your target')} is gone`} · worth <b>$${p.payTo}</b> to you</div>`
+      : sg && sg.rbCap && p.pos === 'RB' && !p.gone ? `<div class="oc-plan"><b>Your plan:</b> one stud, then flyers — RB money capped at <b>$${sg.rbCap}</b></div>` : '';
     // nine years of their own bidding: who at this table chases this position
     // who needs this position TONIGHT, and how badly -- not what they did in past years
     const needs = (R.posNeeds && R.posNeeds[p.pos]) || [];
@@ -702,7 +735,7 @@
         <div class="stat"><b class="${threats.length ? 'neg-edge' : 'pos-edge'}">${threats.length}</b><span>real threats</span></div>
       </div>
       <div class="oc-verdict">${verdict}</div>${why}
-      ${meCan.ok ? bidGauge(bid, p.mkt, payTo, myMax) : ''}
+      ${meCan.ok ? bidGauge(bid, p.mkt, payTo, myMax) : ''}${planLine}
       <div class="oc-foot">
         <span><b>Can raise:</b> ${raisers.length ? raisers.slice(0, 6).map(({ t, st }) => `${esc(tn(t.name))} $${st.maxBid}${tag(t.name)}`).join(' · ') + (raisers.length > 6 ? ` · +${raisers.length - 6}` : '') : 'nobody'}</span>
         <span><b>${esc(p.pos)} market:</b> ${must.length ? `${must.length} need a starter (${must.map((n) => esc(tn(n.name)) + (n.starters > 1 ? ' ×' + n.starters : '') + ' $' + n.maxBid).join(', ')})` : 'nobody needs a starter'}${flexers.length ? ` · ${flexers.length} FLEX open` : ''} · ${sc.solid} solid left</span>
@@ -732,7 +765,7 @@
   }
 
   function render() {
-    R = state ? M.compute(POOL, state, me) : null;
+    R = state ? M.compute(POOL, state, me, strategy) : null;
     renderMeSelect(); renderSeat(); renderCockpit(); renderPlan(); renderTargets(); renderTrends(); renderBoard(); renderRecent(); renderClock();
   }
 
