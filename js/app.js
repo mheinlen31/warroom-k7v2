@@ -10,6 +10,9 @@
   const posClass = (p) => 'pos-' + String(p).replace('/', '');
 
   let me = localStorage.getItem('sfg-me') || 'Silent Pugios';
+  // display names: the long ones break layouts on a phone; the real name stays the key everywhere
+  const SHORT = { 'AFRESHAYPEPPER ASAYWHEN': 'Pep' };
+  const tn = (name) => SHORT[name] || name || '';
   let tab = localStorage.getItem('sfg-tab') || 'ALL';
   if (!TABS.includes(tab)) tab = 'ALL';
   let q = '';
@@ -145,18 +148,18 @@
     line('2025', sl ? `${sl}${p.fp25 && p.gp25 ? ` · <b>${(p.fp25 / p.gp25).toFixed(1)}</b>/g` : ''}` : '');
     // this league's history
     const h = (T && T.history && T.history[histKey(p.name)]) || [];
-    line('Paid here', h.length ? h.slice(0, 6).map((r) => `<b>${r.y}</b> $${r.p} ${esc(r.o || '')}${r.k ? ' <i class="kp">keeper</i>' : ''}${r.pts != null ? ` → ${r.pts} pts${r.rk ? `, ${esc(p.pos)}${r.rk}` : ''}` : ''}`).join(' · ') : (p.yrs > 1 ? 'never rostered in this league' : ''));
+    line('Paid here', h.length ? h.slice(0, 6).map((r) => `<b>${r.y}</b> $${r.p} ${esc(tn(r.o || ''))}${r.k ? ' <i class="kp">keeper</i>' : ''}${r.pts != null ? ` → ${r.pts} pts${r.rk ? `, ${esc(p.pos)}${r.rk}` : ''}` : ''}`).join(' · ') : (p.yrs > 1 ? 'never rostered in this league' : ''));
     // tonight's room
     const needs = (R.posNeeds && R.posNeeds[p.pos]) || [];
     const must = needs.filter((n) => n.degree === 3 && n.name !== me), flex = needs.filter((n) => n.degree === 2 && n.name !== me);
-    const hunters = (p.contestBy || []).map((nm) => { const n = needs.find((x) => x.name === nm); return `${esc(nm)}${n ? ` <i>${esc(needLabel(n, p.pos))}</i>` : ''}`; });
-    if (p.gone) line('Owned', `${p.gone.keeper ? 'kept' : 'sold'} by <b>${esc(p.gone.team)}</b> for <b>$${p.gone.cost}</b>${p.gone.n ? ` · pick ${p.gone.n}` : ''}`);
-    else line('Tonight', `room <b>$${p.mkt}</b> · ${p.bidders} can pay${hunters.length ? ` · hunted by ${hunters.join(', ')}` : ' · nobody hunting him'}${must.length ? ` · ${must.length} still need a ${esc(p.pos)} starter (${must.map((n) => esc(n.name) + (n.starters > 1 ? ' ×' + n.starters : '')).join(', ')})` : ''}${flex.length ? ` · ${flex.length} FLEX open` : ''}`);
+    const hunters = (p.contestBy || []).map((nm) => { const n = needs.find((x) => x.name === nm); return `${esc(tn(nm))}${n ? ` <i>${esc(needLabel(n, p.pos))}</i>` : ''}`; });
+    if (p.gone) line('Owned', `${p.gone.keeper ? 'kept' : 'sold'} by <b>${esc(tn(p.gone.team))}</b> for <b>$${p.gone.cost}</b>${p.gone.n ? ` · pick ${p.gone.n}` : ''}`);
+    else line('Tonight', `room <b>$${p.mkt}</b> · ${p.bidders} can pay${hunters.length ? ` · hunted by ${hunters.join(', ')}` : ' · nobody hunting him'}${must.length ? ` · ${must.length} still need a ${esc(p.pos)} starter (${must.map((n) => esc(tn(n.name)) + (n.starters > 1 ? ' ×' + n.starters : '')).join(', ')})` : ''}${flex.length ? ` · ${flex.length} FLEX open` : ''}`);
     // teammates at his position (depth-chart proxy)
     if (p.pos === 'RB' || p.pos === 'WR' || p.pos === 'TE') {
       const mates = (window.GUIDE_PLAYERS.players || []).filter((x) => x.nfl === p.nfl && x.pos === p.pos && x.name !== p.name && x.proj > 20)
         .sort((a, b) => b.proj - a.proj).slice(0, 3);
-      line(`${esc(p.nfl || '')} ${esc(p.pos)}s`, mates.map((x) => `${esc(x.name)} ${x.proj.toFixed(0)}${rosteredBy[E.normName(x.name)] ? ` <i>${esc(rosteredBy[E.normName(x.name)])}</i>` : ''}`).join(' · '));
+      line(`${esc(p.nfl || '')} ${esc(p.pos)}s`, mates.map((x) => `${esc(x.name)} ${x.proj.toFixed(0)}${rosteredBy[E.normName(x.name)] ? ` <i>${esc(tn(rosteredBy[E.normName(x.name)]))}</i>` : ''}`).join(' · '));
     }
     // you
     let clash = '';
@@ -203,7 +206,7 @@
     if (last5.length >= 3) { const c = {}; last5.forEach((p) => { c[p] = (c[p] || 0) + 1; }); const top = Object.entries(c).sort((a, b) => b[1] - a[1])[0]; if (top && top[1] >= 3) run = { pos: top[0], n: top[1] }; }
     const seat = me_ ? `
       <div class="card">
-        <h4>${esc(me_.name)}</h4>
+        <h4>${esc(tn(me_.name))}</h4>
         <div class="stats">
           <div class="stat big${me_.remaining <= 5 ? ' red' : ''}"><b>${money(me_.remaining)}</b><span>left</span></div>
           <div class="stat"><b>${money(me_.maxBid)}</b><span>max bid</span></div>
@@ -226,7 +229,7 @@
           ${paid.n >= 5 ? `<div class="stat"><b>${paid.ratio.toFixed(2)}×</b><span>paying vs ESPN</span></div>` : ''}
         </div>
         ${run ? `<div class="fact run"><b>${esc(run.pos)} run</b> — ${run.n} of the last 5 picks</div>` : ''}
-        ${L.nominator ? `<div class="fact nom"><b>${esc(L.nominator)}</b> nominates${L.untilMe === 0 ? " — that's you" : L.untilMe != null ? ` · you're up in ${L.untilMe}` : ''}</div>` : ''}
+        ${L.nominator ? `<div class="fact nom"><b>${esc(tn(L.nominator))}</b> nominates${L.untilMe === 0 ? " — that's you" : L.untilMe != null ? ` · you're up in ${L.untilMe}` : ''}</div>` : ''}
       </div>`;
     const scar = `
       <div class="card">
@@ -249,14 +252,14 @@
     if (!R || !R.me) { box.innerHTML = ''; return; }
     const m = R.me, L = R.league;
     box.innerHTML = `<div class="seat-in">
-      <span class="seat-name">${esc(m.name)}</span>
+      <span class="seat-name">${esc(tn(m.name))}</span>
       <span class="seat-n big${m.remaining <= 5 ? ' red' : ''}"><b>${money(m.remaining)}</b><small>left</small></span>
       <span class="seat-n"><b>${money(m.maxBid)}</b><small>max bid</small></span>
       <span class="seat-n"><b>${m.open}</b><small>spots</small></span>
       <span class="seat-n"><b>${money(m.avgPerOpen)}</b><small>avg/spot</small></span>
       ${m.tax ? `<span class="seat-n red"><b>−${money(m.tax)}</b><small>tax</small></span>` : ''}
       <span class="seat-needs">${m.needs.length ? m.needs.map((n) => `<i class="chip ${posClass(n === 'FLEX' || n === 'BE' ? 'X' : n)}">${esc(n)}</i>`).join('') : '<i class="chip">roster full</i>'}</span>
-      ${L.nominator ? `<span class="seat-nom"><b>${esc(L.nominator)}</b> nominates${L.untilMe === 0 ? " — you're up" : L.untilMe != null ? ` · you in ${L.untilMe}` : ''}</span>` : ''}
+      ${L.nominator ? `<span class="seat-nom"><b>${esc(tn(L.nominator))}</b> nominates${L.untilMe === 0 ? " — you're up" : L.untilMe != null ? ` · you in ${L.untilMe}` : ''}</span>` : ''}
     </div>`;
   }
 
@@ -267,11 +270,11 @@
     if (!R || !R.posNeeds || !R.posNeeds[pos]) return '';
     const L = R.posNeeds[pos];
     const must = L.filter((n) => n.degree === 3), flex = L.filter((n) => n.degree === 2), bench = L.filter((n) => n.degree === 1), cant = L.filter((n) => n.degree === 0);
-    const nm = (n) => `${esc(n.name)}${n.starters > 1 ? ` ×${n.starters}` : ''} <small>$${n.maxBid}</small>`;
+    const nm = (n) => `${esc(tn(n.name))}${n.starters > 1 ? ` ×${n.starters}` : ''} <small>$${n.maxBid}</small>`;
     return `<div class="hint needs"><b>Still need ${esc(pos)}:</b> ${must.length ? must.map(nm).join(' · ') : 'nobody'}
-      ${flex.length ? `<span class="dim">· FLEX open: ${flex.map((n) => esc(n.name)).join(', ')}</span>` : ''}
+      ${flex.length ? `<span class="dim">· FLEX open: ${flex.map((n) => esc(tn(n.name))).join(', ')}</span>` : ''}
       ${bench.length ? `<span class="dim">· bench only: ${bench.length}</span>` : ''}
-      ${cant.length ? `<span class="dim">· can't: ${cant.map((n) => esc(n.name)).join(', ')}</span>` : ''}</div>`;
+      ${cant.length ? `<span class="dim">· can't: ${cant.map((n) => esc(tn(n.name))).join(', ')}</span>` : ''}</div>`;
   }
 
   /* Second row of the cockpit: the plan, the drain list, your roster.
@@ -320,7 +323,7 @@
     const nomCard = `<div class="card">
       <h4>Nominate now · your targets with the clearest path</h4>
       ${nn.length ? nn.map((p) => `<div class="dr"><span class="nm">${esc(p.name)}</span><span class="pos ${posClass(p.pos)}">${esc(p.pos)}</span>
-        <span class="drv">${p.contest ? `<b class="warn">${p.contest}</b> hunting${p.contestBy.length ? ` (${p.contestBy.slice(0, 2).map((nm) => { const n = (R.posNeeds[p.pos] || []).find((x) => x.name === nm); return esc(nm) + (n ? ` <i>${esc(needLabel(n, p.pos))}</i>` : ''); }).join(', ')}${p.contestBy.length > 2 ? ` +${p.contestBy.length - 2}` : ''})` : ''}` : '<b class="ok">clear path</b>'} · you $${p.payTo} · room $${p.mkt}</span></div>`).join('')
+        <span class="drv">${p.contest ? `<b class="warn">${p.contest}</b> hunting${p.contestBy.length ? ` (${p.contestBy.slice(0, 2).map((nm) => { const n = (R.posNeeds[p.pos] || []).find((x) => x.name === nm); return esc(tn(nm)) + (n ? ` <i>${esc(needLabel(n, p.pos))}</i>` : ''); }).join(', ')}${p.contestBy.length > 2 ? ` +${p.contestBy.length - 2}` : ''})` : ''}` : '<b class="ok">clear path</b>'} · you $${p.payTo} · room $${p.mkt}</span></div>`).join('')
         : '<div class="fact">Nothing on your list has a clear path yet — drain instead.</div>'}
     </div>`;
     // ---- $1 fliers ----
@@ -342,7 +345,7 @@
     const budgets = `<div class="card">
       <h4>Room budgets · richest first · open starters</h4>
       <table class="rb">${R.teams.slice().sort((a, b) => b.remaining - a.remaining).map((t) => `
-        <tr class="${t.name === me ? 'me' : ''}"><td class="tn">${esc(t.name)}<div class="tneeds">${(t.needs || []).length ? t.needs.map((n) => `<i class="${posClass(n)}">${esc(n)}</i>`).join('') : '<i class="done">starters set</i>'}</div></td><td class="tl">$${t.remaining}</td><td class="tm">max $${t.maxBid}</td><td class="to">${t.open} open</td></tr>`).join('')}</table>
+        <tr class="${t.name === me ? 'me' : ''}"><td class="tn">${esc(tn(t.name))}<div class="tneeds">${(t.needs || []).length ? t.needs.map((n) => `<i class="${posClass(n)}">${esc(n)}</i>`).join('') : '<i class="done">starters set</i>'}</div></td><td class="tl">$${t.remaining}</td><td class="tm">max $${t.maxBid}</td><td class="to">${t.open} open</td></tr>`).join('')}</table>
     </div>`;
     // ---- room rosters: who has what, at a glance ----
     // one row per team, a count per position; amber = still short of a
@@ -358,7 +361,7 @@
     const rostersCard = `<div class="card wide2">
       <h4>Room rosters · who has what</h4>
       <table class="rr"><thead><tr><th class="l">team</th>${POSL.map((p) => `<th class="${posClass(p)}">${esc(p.replace('/', ''))}</th>`).join('')}<th>filled</th></tr></thead>
-      <tbody>${rr.map((r) => `<tr class="${r.name === me ? 'me' : ''}"><td class="tn">${esc(r.name)}</td>${POSL.map((p) => {
+      <tbody>${rr.map((r) => `<tr class="${r.name === me ? 'me' : ''}"><td class="tn">${esc(tn(r.name))}</td>${POSL.map((p) => {
           const n = r.c[p], need = NEED[p], max = (E.POS_MAX || {})[p] || 99;
           const cls = n < need ? 'need' : n >= max ? 'full' : '';
           const tip = `${n} ${p}${n < need ? ` · needs ${need - n} more starter${need - n > 1 ? 's' : ''}` : n >= max ? ' · at the max' : ''}`;
@@ -457,7 +460,7 @@
         <td class="rk">${p.n}</td>
         <td class="pl"><div class="nm">${esc(p.name)}</div>
           <div class="meta"><span class="pos ${posClass(p.pos)}">${esc(p.pos)}${(poolByName[E.normName(p.name)] || {}).preRank || ''}</span>${p.nfl ? `<span>${esc(p.nfl)}</span>` : ''}</div></td>
-        <td class="team-cell wide">${esc(p.team)}</td>
+        <td class="team-cell wide">${esc(tn(p.team))}</td>
         <td class="model">$${p.cost}</td>
         <td class="mkt">${aav != null ? '$' + aav : '—'}</td>
         <td class="edge">${dh}</td>
@@ -508,7 +511,7 @@
       $('sort-btn').hidden = true;
       soldHtml = sold.length ? `<table class="soldlist"><tbody>${sold.map((p) => `<tr class="sold"><td class="w">★</td><td class="rk">${p.n}</td>
         <td class="pl"><div class="nm">${esc(p.name)}</div><div class="meta"><span class="pos ${posClass(p.pos)}">${esc(p.pos)}</span></div></td>
-        <td class="team-cell">sold to ${esc(p.team)}</td><td class="model">$${p.cost}</td></tr>`).join('')}</tbody></table>` : '';
+        <td class="team-cell">sold to ${esc(tn(p.team))}</td><td class="model">$${p.cost}</td></tr>`).join('')}</tbody></table>` : '';
       if (!rows.length) { $('board').innerHTML = soldHtml || '<div class="empty">Tap ★ on any player to watch him here.</div>'; return; }
     }
     if (q) rows = R.avail.filter((p) => p.name.toLowerCase().includes(q)).sort((a, b) => b.model - a.model);
@@ -575,7 +578,7 @@
   function renderRecent() {
     if (!R) return;
     $('recent').innerHTML = R.recent.length ? `<h4>Last picks</h4><div class="rl">${R.recent.map((p) =>
-      `<span class="rp"><b>${esc(p.name)}</b><i>$${p.cost}</i><em>${esc(p.team)}</em></span>`).join('')}</div>` : '';
+      `<span class="rp"><b>${esc(p.name)}</b><i>$${p.cost}</i><em>${esc(tn(p.team))}</em></span>`).join('')}</div>` : '';
   }
 
   /* ON THE CLOCK. The board publishes the nomination and the bid as it climbs;
@@ -653,8 +656,8 @@
       </div>
       <div class="oc-verdict">${verdict}</div>${why}
       <div class="oc-foot">
-        <span><b>Can raise:</b> ${raisers.length ? raisers.slice(0, 6).map(({ t, st }) => `${esc(t.name)} $${st.maxBid}${tag(t.name)}`).join(' · ') + (raisers.length > 6 ? ` · +${raisers.length - 6}` : '') : 'nobody'}</span>
-        <span><b>${esc(p.pos)} market:</b> ${must.length ? `${must.length} need a starter (${must.map((n) => esc(n.name) + (n.starters > 1 ? ' ×' + n.starters : '') + ' $' + n.maxBid).join(', ')})` : 'nobody needs a starter'}${flexers.length ? ` · ${flexers.length} FLEX open` : ''} · ${sc.solid} solid left</span>
+        <span><b>Can raise:</b> ${raisers.length ? raisers.slice(0, 6).map(({ t, st }) => `${esc(tn(t.name))} $${st.maxBid}${tag(t.name)}`).join(' · ') + (raisers.length > 6 ? ` · +${raisers.length - 6}` : '') : 'nobody'}</span>
+        <span><b>${esc(p.pos)} market:</b> ${must.length ? `${must.length} need a starter (${must.map((n) => esc(tn(n.name)) + (n.starters > 1 ? ' ×' + n.starters : '') + ' $' + n.maxBid).join(', ')})` : 'nobody needs a starter'}${flexers.length ? ` · ${flexers.length} FLEX open` : ''} · ${sc.solid} solid left</span>
         <span><b>Next best:</b> ${alts.length ? alts.map((x) => `${esc(x.name)} $${x.model}${x.payTo != null && x.payTo !== x.model ? ` <i class="yu">you $${x.payTo}</i>` : ''}`).join(' · ') : 'nobody worth paying for'}</span>
       </div>
     </div>`;
@@ -677,7 +680,7 @@
     const names = (state && state.teams || []).map((t) => t.name);
     if (!names.length) return;
     if (!names.includes(me)) me = names[0];
-    $('me-select').innerHTML = names.map((n) => `<option${n === me ? ' selected' : ''}>${esc(n)}</option>`).join('');
+    $('me-select').innerHTML = names.map((n) => `<option value="${esc(n)}"${n === me ? ' selected' : ''}>${esc(tn(n))}</option>`).join('');
   }
 
   function render() {
