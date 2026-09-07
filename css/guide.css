@@ -398,3 +398,25 @@ body[data-view="room"] .v-board, body[data-view="room"] .v-mine { display:none; 
   .dr .drv { flex:1 1 100%; margin-left:0; white-space:normal; line-height:1.4; }
   .tc { flex-wrap:wrap; } .tc .pr { white-space:normal; }
 }
+
+/* ---- dominate: gauge, threats, when-you're-up, liquidity, big buys ---- */
+.gauge2 { margin-top:10px; padding:2px 6px 0; }
+.g-track { position:relative; height:12px; border-radius:6px; background:rgba(255,255,255,.07); overflow:visible; }
+.g-fill { height:100%; border-radius:6px; background:var(--green); transition:width .35s cubic-bezier(.2,.8,.2,1); }
+.gauge2.warn .g-fill { background:#ffb35c; } .gauge2.stop .g-fill { background:var(--red); } .gauge2.idle .g-fill { background:transparent; }
+.g-mark { position:absolute; top:-4px; width:2px; height:20px; margin-left:-1px; background:var(--soft); opacity:.9; }
+.g-mark.you { background:var(--gold); width:3px; margin-left:-1.5px; } .g-mark.max { background:var(--red); opacity:.7; } .g-mark.room { background:var(--soft); opacity:.6; }
+.g-bid { position:absolute; top:-22px; transform:translateX(-50%); font:800 12px var(--display); color:var(--ink); background:var(--panel2); padding:1px 6px; border-radius:3px; border:1px solid var(--line2); white-space:nowrap; }
+.g-labels { position:relative; height:16px; margin-top:6px; }
+.g-labels span { position:absolute; transform:translateX(-50%); font:800 9.5px var(--data); letter-spacing:.08em; text-transform:uppercase; white-space:nowrap; color:var(--soft); }
+.g-labels span.you { color:var(--gold); } .g-labels span.max { color:var(--red); opacity:.8; }
+.seat-up { margin:6px 0 0; padding:7px 12px; border:1px dashed var(--line2); border-radius:4px; font-size:12.5px; color:var(--soft); line-height:1.5; }
+.seat-up > b { color:var(--faint); font-size:10px; letter-spacing:.14em; text-transform:uppercase; margin-right:6px; }
+.seat-up b.g { color:var(--green); font-family:var(--display); font-size:14px; text-transform:uppercase; } .seat-up b.r { color:var(--red); font-family:var(--display); font-size:14px; text-transform:uppercase; }
+.seat-up small { color:var(--faint); font-size:11px; margin-left:4px; } .seat-up i { color:var(--faint); font-style:normal; margin:0 4px; }
+.seat-liq { display:flex; align-items:baseline; gap:8px; }
+.seat-liq small { font-size:8.5px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:var(--faint); }
+.seat-liq b { font-family:var(--data); font-size:10.5px; font-weight:700; color:var(--faint); letter-spacing:.04em; } .seat-liq b em { font-style:normal; font-family:var(--display); font-size:15px; font-weight:800; color:var(--ink); margin-left:2px; }
+.seat-liq b.hot em { color:#ffb35c; }
+table.rb .tb { color:var(--soft); text-align:right; font-size:11px; white-space:nowrap; } table.rb .tb.low { color:#ffb35c; } table.rb .tb.none { color:var(--red); }
+@media (max-width:640px) { .seat-liq { flex:1 1 100%; } .seat-up { font-size:12px; } }

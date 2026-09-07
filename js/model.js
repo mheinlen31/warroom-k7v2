@@ -440,9 +440,15 @@ window.GuideModel = (function () {
     const recent = ((state && state.picks) || []).slice(-10).reverse();
     return {
       avail, byPos, repl, scarcity, me, recent, target, auctionSpentAt, posNeeds,
+      // liquidity: how many seats can still pay a star, a starter, a mid-tier price
       league: { moneyLeft, openSpots, spendable, inflation, tilt, nominator, untilMe, teams: ts.length,
+                liquidity: { 40: ts.filter((x) => x.st.open > 0 && x.st.maxBid >= 40).length,
+                             20: ts.filter((x) => x.st.open > 0 && x.st.maxBid >= 20).length,
+                             10: ts.filter((x) => x.st.open > 0 && x.st.maxBid >= 10).length },
                 picks: ((state && state.picks) || []).length },
       teams: ts.map(({ t, st }) => ({ name: t.name, remaining: st.remaining, maxBid: st.maxBid, open: st.open,
+        // how many $25 players he can still buy while keeping $1 for every other spot
+        bigBuys: st.open > 0 ? Math.max(0, Math.floor((st.remaining - st.open) / 24)) : 0,
         needs: E.SLOTS.filter((sl) => sl.takes && !st.slots[sl.id]).map((sl) => sl.label) })),
     };
   }

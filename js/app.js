@@ -109,6 +109,21 @@
   });
 
   const money = (n) => '$' + Math.round(n);
+  // the bid against the three numbers that matter, as one bar you can read from
+  // across the couch: green while the bid is under your number, amber past it,
+  // red at your max. Marks for what the room will pay, your number, your max.
+  function bidGauge(bid, room, you, max) {
+    const top = Math.max(1, room, you, max, bid) * 1.08;
+    const pct = (v) => Math.max(0, Math.min(100, 100 * v / top)).toFixed(1);
+    const cls = bid <= 0 ? 'idle' : bid < you ? 'go' : bid < max ? 'warn' : 'stop';
+    const marks = [{ v: room, l: 'room', c: 'room' }, { v: you, l: 'you', c: 'you' }, { v: max, l: 'max', c: 'max' }];
+    return `<div class="gauge2 ${cls}" title="bid $${bid} · room $${room} · you $${you} · your max $${max}">
+      <div class="g-track"><div class="g-fill" style="width:${pct(bid)}%"></div>
+        ${marks.map((mk) => `<i class="g-mark ${mk.c}" style="left:${pct(mk.v)}%"></i>`).join('')}
+        ${bid > 0 ? `<b class="g-bid" style="left:${pct(bid)}%">$${bid}</b>` : ''}</div>
+      <div class="g-labels">${marks.map((mk) => `<span class="${mk.c}" style="left:${pct(mk.v)}%">${mk.l} $${mk.v}</span>`).join('')}</div>
+    </div>`;
+  }
   // what each source individually ranks this player: ESPN first, then the outside sources
   const srcChips = (p) => (p.espnPos ? `<span class="src espn" title="ESPN: ${esc(p.pos)}${p.espnPos}, overall #${p.rank}">ESPN ${esc(p.pos.replace('/', ''))}${p.espnPos}</span>` : '') + Object.entries(p.srcPos || {}).map(([l, r]) =>
     `<span class="src" title="${esc(l)}: ${esc(p.pos)}${r}${p.srcTier && p.srcTier[l] ? ` · tier ${p.srcTier[l]}` : ''}${p.srcProj && p.srcProj[l] ? ` · ${p.srcProj[l]} pts` : ''}">${esc(l)} ${esc(p.pos.replace('/', ''))}${r}${p.srcTier && p.srcTier[l] ? ` · T${p.srcTier[l]}` : ''}${p.srcProj && p.srcProj[l] ? ` · ${Math.round(p.srcProj[l])}` : ''}</span>`).join('');
@@ -260,12 +275,25 @@
   }
   let seatCardHtml = '';
 
+  // players the room will pay well past YOUR number for: nominate them and let other people spend
+  function drainList() {
+    if (!R || !R.me) return [];
+    const wanted = new Set(R.me.targets.flatMap((t) => t.cands.map((c) => c.name)));
+    const yours = (p) => p.payTo == null ? p.model : p.payTo;
+    const gapOf = (p) => p.mkt - yours(p);
+    return R.avail.filter((p) => p.mkt >= 10 && !wanted.has(p.name) && gapOf(p) >= 4 && p.bidders >= 2)
+      .sort((a, b) => gapOf(b) - gapOf(a)).slice(0, 6);
+  }
+
   /* One line of the numbers you need while a player is up: your money, your
-     open spots, who's nominating. Sits right above the rankings. */
+     open spots, who's nominating -- and what to do when it's your turn. */
   function renderSeat() {
     const box = $('seat');
     if (!R || !R.me) { box.innerHTML = ''; return; }
     const m = R.me, L = R.league;
+    const nom = (m.nominateNow || [])[0], dr = drainList()[0];
+    const up = nom || dr ? `<div class="seat-up"><b>When you're up:</b> ${nom ? `nominate <b class="g">${esc(nom.name)}</b> <small>${nom.contest ? nom.contest + ' hunting' : 'clear path'} · you $${nom.payTo} · room $${nom.mkt}</small>` : ''}${nom && dr ? ' <i>or</i> ' : ''}${dr ? `drain <b class="r">${esc(dr.name)}</b> <small>room ~$${dr.mkt} · you $${dr.payTo == null ? dr.model : dr.payTo}</small>` : ''}</div>` : '';
+    const liq = L.liquidity ? `<span class="seat-liq" title="how many seats can still pay this much for one player"><small>can pay</small><b class="${L.liquidity[40] <= 3 ? 'hot' : ''}">$40+ <em>${L.liquidity[40]}</em></b><b>$20+ <em>${L.liquidity[20]}</em></b><b>$10+ <em>${L.liquidity[10]}</em></b></span>` : '';
     box.innerHTML = `<div class="seat-in">
       <span class="seat-name">${esc(tn(m.name))}</span>
       <span class="seat-n big${m.remaining <= 5 ? ' red' : ''}"><b>${money(m.remaining)}</b><small>left</small></span>
@@ -274,8 +302,9 @@
       <span class="seat-n"><b>${money(m.avgPerOpen)}</b><small>avg/spot</small></span>
       ${m.tax ? `<span class="seat-n red"><b>−${money(m.tax)}</b><small>tax</small></span>` : ''}
       <span class="seat-needs">${m.needs.length ? m.needs.map((n) => `<i class="chip ${posClass(n === 'FLEX' || n === 'BE' ? 'X' : n)}">${esc(n)}</i>`).join('') : '<i class="chip">roster full</i>'}</span>
+      ${liq}
       ${L.nominator ? `<span class="seat-nom"><b>${esc(tn(L.nominator))}</b> nominates${L.untilMe === 0 ? " — you're up" : L.untilMe != null ? ` · you in ${L.untilMe}` : ''}</span>` : ''}
-    </div>`;
+    </div>${up}`;
   }
 
   /* who needs this position tonight, and how badly */
@@ -320,11 +349,8 @@
 
     // ---- drain ----
     // the room will pay well past YOUR number: nominate them and let other people spend
-    const wanted = new Set(me_.targets.flatMap((t) => t.cands.map((c) => c.name)));
     const yours = (p) => p.payTo == null ? p.model : p.payTo;
-    const gapOf = (p) => p.mkt - yours(p);
-    const drain = R.avail.filter((p) => p.mkt >= 10 && !wanted.has(p.name) && gapOf(p) >= 4 && p.bidders >= 2)
-      .sort((a, b) => gapOf(b) - gapOf(a)).slice(0, 6);
+    const drain = drainList();
     const drainCard = `<div class="card">
       <h4>Nominate to drain · the room pays more than you would</h4>
       ${drain.length ? drain.map((p) => `<div class="dr"><span class="nm">${esc(p.name)}</span><span class="pos ${posClass(p.pos)}">${esc(p.pos)}</span>
@@ -359,7 +385,7 @@
     const budgets = `<div class="card">
       <h4>Room budgets · richest first · open starters</h4>
       <table class="rb">${R.teams.slice().sort((a, b) => b.remaining - a.remaining).map((t) => `
-        <tr class="${t.name === me ? 'me' : ''}"><td class="tn">${esc(tn(t.name))}<div class="tneeds">${(t.needs || []).length ? t.needs.map((n) => `<i class="${posClass(n)}">${esc(n)}</i>`).join('') : '<i class="done">starters set</i>'}</div></td><td class="tl">$${t.remaining}</td><td class="tm">max $${t.maxBid}</td><td class="to">${t.open} open</td></tr>`).join('')}</table>
+        <tr class="${t.name === me ? 'me' : ''}"><td class="tn">${esc(tn(t.name))}<div class="tneeds">${(t.needs || []).length ? t.needs.map((n) => `<i class="${posClass(n)}">${esc(n)}</i>`).join('') : '<i class="done">starters set</i>'}</div></td><td class="tl">$${t.remaining}</td><td class="tm">max $${t.maxBid}</td><td class="to">${t.open} open</td><td class="tb ${t.bigBuys === 0 ? 'none' : t.bigBuys <= 1 ? 'low' : ''}" title="how many $25 players he can still buy while keeping $1 for every other spot">${t.bigBuys} big</td></tr>`).join('')}</table>
     </div>`;
     // ---- room rosters: who has what, at a glance ----
     // one row per team, a count per position; amber = still short of a
@@ -630,9 +656,14 @@
     const row = document.querySelector(`#board tr[data-n="${clock.name.replace(/"/g, '&quot;')}"]`);
     if (row) row.classList.add('onclock');
     // who can still raise: needs a max bid ABOVE the current one and a legal slot
+    // who can still raise, threats first: a seat that NEEDS this position and can pay
+    // outranks a richer seat that would only be filling a bench spot
+    const needsAll = (R.posNeeds && R.posNeeds[p.pos]) || [];
+    const degreeOf = (name) => { const n = needsAll.find((x) => x.name === name); return n ? n.degree : 0; };
     const raisers = (state.teams || []).map((t) => ({ t, st: E.teamState(t) }))
       .filter(({ t, st }) => st.open > 0 && st.maxBid > bid && E.canRoster(t, p.pos).ok)
-      .sort((a, b) => b.st.maxBid - a.st.maxBid);
+      .sort((a, b) => (degreeOf(b.t.name) - degreeOf(a.t.name)) || (b.st.maxBid - a.st.maxBid));
+    const threats = raisers.filter(({ t }) => t.name !== me && degreeOf(t.name) >= 2);
     const meCan = meT ? E.canRoster(meT, p.pos) : { ok: false, why: '' };
     const myMax = meSt ? meSt.maxBid : 0;
     const payTo = p.payTo != null ? p.payTo : Math.min(p.model, myMax);
@@ -668,8 +699,10 @@
         <div class="stat"><b class="${p.edge > 0 ? 'pos-edge' : p.edge < 0 ? 'neg-edge' : ''}">${p.edge > 0 ? '+' : ''}$${p.edge}</b><span>edge</span></div>
         <div class="stat"><b>$${myMax}</b><span>your max</span></div>
         <div class="stat"><b>${raisers.length}</b><span>can still raise</span></div>
+        <div class="stat"><b class="${threats.length ? 'neg-edge' : 'pos-edge'}">${threats.length}</b><span>real threats</span></div>
       </div>
       <div class="oc-verdict">${verdict}</div>${why}
+      ${meCan.ok ? bidGauge(bid, p.mkt, payTo, myMax) : ''}
       <div class="oc-foot">
         <span><b>Can raise:</b> ${raisers.length ? raisers.slice(0, 6).map(({ t, st }) => `${esc(tn(t.name))} $${st.maxBid}${tag(t.name)}`).join(' · ') + (raisers.length > 6 ? ` · +${raisers.length - 6}` : '') : 'nobody'}</span>
         <span><b>${esc(p.pos)} market:</b> ${must.length ? `${must.length} need a starter (${must.map((n) => esc(tn(n.name)) + (n.starters > 1 ? ' ×' + n.starters : '') + ' $' + n.maxBid).join(', ')})` : 'nobody needs a starter'}${flexers.length ? ` · ${flexers.length} FLEX open` : ''} · ${sc.solid} solid left</span>
@@ -718,6 +751,7 @@
   window.LiveDraft.subscribe((st) => { state = st; pill.className = 'pill live'; pill.textContent = 'Live'; render(); })
     .catch(() => { pill.className = 'pill off'; pill.textContent = 'Offline'; render(); });
   window.LiveDraft.subscribeClock((c) => { clock = c; renderClock(); }).catch(() => {});
+  if (location.search.includes('test=1')) window.__wrTestClock = (c) => { clock = c; renderClock(); };
   window.LiveDraft.onConnectionChange((up) => {
     pill.className = 'pill ' + (up ? 'live' : 'off'); pill.textContent = up ? 'Live' : 'Reconnecting';
   }).catch(() => {});
