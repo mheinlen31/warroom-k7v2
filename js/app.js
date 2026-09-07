@@ -18,6 +18,13 @@
   const expanded = new Set();                      // exceptions: open rows, or closed rows when expandAll is on
   let expandAll = localStorage.getItem('sfg-expand') === '1';
   const isOpen = (n) => expandAll ? !expanded.has(n) : expanded.has(n);
+  // keep the iPad/phone awake while the War Room is open (Safari 16.4+); re-take the lock when we come back
+  let wake = null;
+  const keepAwake = async () => { try { if ('wakeLock' in navigator && document.visibilityState === 'visible') wake = await navigator.wakeLock.request('screen'); } catch (e) { /* denied or unsupported: harmless */ } };
+  document.addEventListener('visibilitychange', keepAwake); document.addEventListener('pointerdown', keepAwake, { once: true }); keepAwake();
+  // show kept and sold players in the lists too (dimmed), for context on what's left
+  let showAll = localStorage.getItem('sfg-all') === '1';
+  let goneMap = {};                                   // norm name -> {team, cost, keeper, n} for everyone off the board
   const SORTS = ['rank', 'model', 'edge', 'you'];   // composite rank is the default view
   let sortMode = SORTS.includes(localStorage.getItem('sfg-sort2')) ? localStorage.getItem('sfg-sort2') : 'rank';
   let clock = null;                                            // who's on the clock, from the board
@@ -39,6 +46,11 @@
     renderBoard();
   });
   $('q').addEventListener('input', () => { q = $('q').value.trim().toLowerCase(); renderBoard(); });
+  $('all-btn').addEventListener('click', () => {
+    showAll = !showAll;
+    try { localStorage.setItem('sfg-all', showAll ? '1' : '0'); } catch (err) { /* private mode */ }
+    renderBoard();
+  });
   $('expand-btn').addEventListener('click', () => {
     expandAll = !expandAll; expanded.clear();
     try { localStorage.setItem('sfg-expand', expandAll ? '1' : '0'); } catch (err) { /* private mode */ }
@@ -52,7 +64,10 @@
     const det = tr.nextElementSibling;
     const open = isOpen(n);
     if (det && det.classList.contains('det')) {
-      if (open && !det.querySelector('.dhead')) { const p = R && R.avail.find((x) => x.name === n); if (p) det.querySelector('.det-in').innerHTML = detailHtml(p); }
+      if (open && !det.querySelector('.dhead')) {
+        const p = (R && R.avail.find((x) => x.name === n)) || goneEntry(n);
+        if (p) det.querySelector('.det-in').innerHTML = detailHtml(p);
+      }
       det.hidden = !open;
     }
     tr.classList.toggle('open', open);
@@ -110,6 +125,8 @@
   const SUFFIX_RE = /\s+(jr|sr|ii|iii|iv|v)$/;
   const histKey = (name) => E.normName(name).replace(SUFFIX_RE, '');
   const poolByName = (() => { const m = {}; (window.GUIDE_PLAYERS.players || []).forEach((p) => { m[E.normName(p.name)] = p; }); return m; })();
+  // a kept or sold player as a row: the pool entry plus who has him
+  const goneEntry = (name) => { const base = poolByName[E.normName(name)]; const g = goneMap[E.normName(name)]; return base && g ? { ...base, gone: g } : null; };
   function detailHtml(p) {
     const L = [];
     const line = (label, html) => { if (html) L.push(`<div class="dl"><b>${label}</b><span>${html}</span></div>`); };
@@ -118,10 +135,10 @@
     // value
     const repl = R.repl && R.repl[p.pos];
     line('Value', [`proj <b>${p.proj ? p.proj.toFixed(0) : '—'}</b>${p.projFull ? ` (${p.projFull.toFixed(0)} full season, ~${p.games} games)` : ''}`,
-      p.vor > 0 && repl != null ? `+${p.vor.toFixed(0)} over the ${esc(p.pos)} you'd get for $1 (${Math.round(repl)})` : null,
+      p.vor > 0 && repl != null ? `+${p.vor.toFixed(0)} over the ${esc(p.pos)} you'd get for $1 (${Math.round(repl)})` : (p.gone && repl != null && p.proj > repl ? `+${(p.proj - repl).toFixed(0)} over the ${esc(p.pos)} you'd get for $1 (${Math.round(repl)})` : null),
       p.tier ? `tier ${p.tier}${p.cliff ? ' · cliff after him' : ''}` : null].filter(Boolean).join(' · '));
     // rankings
-    const cons = p.cons ? `<b>${esc(p.pos)}${p.compRank}</b> of what's left · <b>${esc(p.pos)}${p.preRank}</b> preseason, everyone on the board · rank ${p.cons}${p.spread > 8 ? ` ±${p.spread}` : ''} · ${p.nsrc} src` : '';
+    const cons = p.cons ? `${p.compRank ? `<b>${esc(p.pos)}${p.compRank}</b> of what's left · ` : ''}<b>${esc(p.pos)}${p.preRank}</b> preseason, everyone on the board · rank ${p.cons}${p.spread > 8 ? ` ±${p.spread}` : ''} · ${p.nsrc} src` : '';
     line('Rankings', `${cons}${srcChips(p) ? ' ' + srcChips(p) : ''}${p.adp ? ` · ESPN ADP ${p.adp}` : ''}${p.aav ? ` · AAV $${p.aav}` : ''}${p.nrank > 1 && p.consEspn ? ` · ${p.nrank} ESPN rankers avg ${p.consEspn}` : ''}`);
     // last season
     const sl = statLine(p);
@@ -133,7 +150,8 @@
     const needs = (R.posNeeds && R.posNeeds[p.pos]) || [];
     const must = needs.filter((n) => n.degree === 3 && n.name !== me), flex = needs.filter((n) => n.degree === 2 && n.name !== me);
     const hunters = (p.contestBy || []).map((nm) => { const n = needs.find((x) => x.name === nm); return `${esc(nm)}${n ? ` <i>${esc(needLabel(n, p.pos))}</i>` : ''}`; });
-    line('Tonight', `room <b>$${p.mkt}</b> · ${p.bidders} can pay${hunters.length ? ` · hunted by ${hunters.join(', ')}` : ' · nobody hunting him'}${must.length ? ` · ${must.length} still need a ${esc(p.pos)} starter (${must.map((n) => esc(n.name) + (n.starters > 1 ? ' ×' + n.starters : '')).join(', ')})` : ''}${flex.length ? ` · ${flex.length} FLEX open` : ''}`);
+    if (p.gone) line('Owned', `${p.gone.keeper ? 'kept' : 'sold'} by <b>${esc(p.gone.team)}</b> for <b>$${p.gone.cost}</b>${p.gone.n ? ` · pick ${p.gone.n}` : ''}`);
+    else line('Tonight', `room <b>$${p.mkt}</b> · ${p.bidders} can pay${hunters.length ? ` · hunted by ${hunters.join(', ')}` : ' · nobody hunting him'}${must.length ? ` · ${must.length} still need a ${esc(p.pos)} starter (${must.map((n) => esc(n.name) + (n.starters > 1 ? ' ×' + n.starters : '')).join(', ')})` : ''}${flex.length ? ` · ${flex.length} FLEX open` : ''}`);
     // teammates at his position (depth-chart proxy)
     if (p.pos === 'RB' || p.pos === 'WR' || p.pos === 'TE') {
       const mates = (window.GUIDE_PLAYERS.players || []).filter((x) => x.nfl === p.nfl && x.pos === p.pos && x.name !== p.name && x.proj > 20)
@@ -494,7 +512,27 @@
       if (!rows.length) { $('board').innerHTML = soldHtml || '<div class="empty">Tap ★ on any player to watch him here.</div>'; return; }
     }
     if (q) rows = R.avail.filter((p) => p.name.toLowerCase().includes(q)).sort((a, b) => b.model - a.model);
-    if (tab !== 'WATCH') $('count').textContent = `${rows.length} available`;
+    // everyone off the board, for the Show-all view
+    goneMap = {};
+    (state && state.teams || []).forEach((t) => (t.players || []).forEach((x) => { goneMap[E.normName(x.name)] = { team: t.name, cost: +x.cost || 0, keeper: !!x.keeper, n: x.n || null }; }));
+    $('all-btn').hidden = tab === 'WATCH';
+    $('all-btn').textContent = showAll ? 'Available only' : 'Show all';
+    if (showAll && tab !== 'WATCH') {
+      const gone = (window.GUIDE_PLAYERS.players || [])
+        .filter((x) => goneMap[E.normName(x.name)] && (x.proj > 0 || x.aav > 0)
+          && (tab === 'ALL' || (tab === 'ROOKIES' ? x.rookie : tab === '2ND YR' ? x.soph : x.pos === tab))
+          && (!q || x.name.toLowerCase().includes(q)))
+        .map((x) => ({ ...x, gone: goneMap[E.normName(x.name)], model: 0, mkt: 0, edge: -999, payTo: 0, bidders: 0 }));
+      rows = rows.concat(gone);
+      if (tab === 'ALL' && !q) rows.sort(sortMode === 'rank'
+        ? ((a, b) => ((a.cons == null) - (b.cons == null)) || (a.cons - b.cons) || (b.proj - a.proj))
+        : sortMode === 'model' ? ((a, b) => b.model - a.model || b.proj - a.proj)
+        : sortMode === 'edge' ? ((a, b) => b.edge - a.edge || b.model - a.model)
+        : ((a, b) => (b.payTo - b.mkt) - (a.payTo - a.mkt) || b.payTo - a.payTo));
+      else if (tab !== 'ALL' && !q) rows.sort((a, b) => ((a.preRank == null) - (b.preRank == null)) || (a.preRank - b.preRank) || (b.proj - a.proj));
+      if (tab === 'ALL' && !q) rows = rows.slice(0, 200);
+    }
+    if (tab !== 'WATCH') $('count').textContent = showAll ? `${rows.length} shown · ${rows.filter((p) => !p.gone).length} available` : `${rows.length} available`;
     $('sort-btn').hidden = tab !== 'ALL' || !!q;
     $('sort-btn').textContent = 'Sort: ' + ({ rank: 'Rank', model: 'Model', edge: 'Edge', you: 'You' })[sortMode];
     if (!rows.length) { $('board').innerHTML = '<div class="empty">nobody matches</div>'; return; }
@@ -510,13 +548,19 @@
       const open = isOpen(p.name);
       const you = p.payTo == null ? '' : p.payTo === 0 ? '—' : money(p.payTo);
       // list view: name, position, team, a cross if he's hurt, and the three prices
-      return head + `<tr class="row${p.cliff && byPosView ? ' cliff' : ''}${watch.has(p.name) ? ' watched' : ''}${open ? ' open' : ''}" data-n="${esc(p.name)}">
-        <td class="w"><button type="button" class="star${watch.has(p.name) ? ' on' : ''}" data-w="${esc(p.name)}" title="Watch list">★</button></td>
-        <td class="rk">${byPosView ? p.compRank : i + 1}</td>
-        <td class="pl"><div class="plx"><span class="nm">${esc(p.name)}</span>${injFlag(p)}<span class="tag ${posClass(p.pos)}" title="${esc(p.pos)}${p.compRank} of the ${esc(p.pos)}s still available">${esc(p.pos)}${byPosView ? '' : p.compRank}</span>${p.preRank && p.preRank !== p.compRank ? `<span class="tag pre" title="preseason: ${esc(p.pos)}${p.preRank} with every player on the board">pre ${p.preRank}</span>` : ''}${p.nfl ? `<span class="tag tm">${esc(p.nfl)}</span>` : ''}</div></td>
-        <td class="model">${money(p.model)}</td>
-        <td class="you${p.payTo > p.model ? ' up' : p.payTo < p.model ? ' down' : ''}">${you}</td>
-        <td class="mkt">${money(p.mkt)}${edgeHtml(p.edge)}</td>
+      const g = p.gone;
+      // Show-all on a position tab orders by preseason rank, so # is the preseason rank there
+      const rk = byPosView ? (showAll ? p.preRank : p.compRank) : i + 1;
+      const liveTag = g ? `<span class="tag gone ${g.keeper ? 'kept' : 'sold'}" title="${g.keeper ? 'kept' : 'sold'} · ${esc(g.team)} · $${g.cost}">${g.keeper ? 'KEPT' : 'SOLD'} ${esc(g.team)} $${g.cost}</span>`
+        : `<span class="tag ${posClass(p.pos)}" title="${esc(p.pos)}${p.compRank} of the ${esc(p.pos)}s still available">${esc(p.pos)}${byPosView && !showAll ? '' : p.compRank}</span>`;
+      const preTag = !g && p.preRank && p.preRank !== p.compRank && !(byPosView && showAll) ? `<span class="tag pre" title="preseason: ${esc(p.pos)}${p.preRank} with every player on the board">pre ${p.preRank}</span>` : '';
+      return head + `<tr class="row${g ? ' gone' : ''}${p.cliff && byPosView ? ' cliff' : ''}${watch.has(p.name) ? ' watched' : ''}${open ? ' open' : ''}" data-n="${esc(p.name)}">
+        <td class="w">${g ? '' : `<button type="button" class="star${watch.has(p.name) ? ' on' : ''}" data-w="${esc(p.name)}" title="Watch list">★</button>`}</td>
+        <td class="rk">${rk}</td>
+        <td class="pl"><div class="plx"><span class="nm">${esc(p.name)}</span>${injFlag(p)}${liveTag}${preTag}${p.nfl ? `<span class="tag tm">${esc(p.nfl)}</span>` : ''}</div></td>
+        <td class="model">${g ? '' : money(p.model)}</td>
+        <td class="you${!g && p.payTo > p.model ? ' up' : !g && p.payTo < p.model ? ' down' : ''}">${g ? '' : you}</td>
+        <td class="mkt">${g ? `<span class="paid">$${g.cost}</span>` : money(p.mkt) + edgeHtml(p.edge)}</td>
       </tr>
       <tr class="det" data-n="${esc(p.name)}"${open ? '' : ' hidden'}><td colspan="6"><div class="det-in">${open ? detailHtml(p) : ''}</div></td></tr>`;
     }).join('');

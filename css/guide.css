@@ -336,3 +336,11 @@ table.list td.model, table.list td.you, table.list td.mkt, table.list td.rk, tab
 /* preseason positional rank, next to the rank among what's left */
 table.list .plx .tag.pre { color:var(--faint); letter-spacing:.04em; text-transform:none; font-weight:700; }
 .oc-sub .pre { font-size:11px; color:var(--faint); font-weight:700; letter-spacing:.04em; }
+
+/* ---- show all: kept and sold players stay in the list, dimmed ---- */
+table.list tr.row.gone td { opacity:.5; }
+table.list tr.row.gone .nm { text-decoration:line-through; text-decoration-color:rgba(255,255,255,.35); }
+table.list .plx .tag.gone { color:var(--gold); text-transform:none; letter-spacing:.03em; font-weight:800; }
+table.list .plx .tag.gone.sold { color:var(--soft); }
+table.list td.mkt .paid { font-family:var(--display); font-weight:700; font-size:14px; color:var(--soft); }
+@media (max-width:640px) { table.list .plx .tag.gone { font-size:9px; } }
