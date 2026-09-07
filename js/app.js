@@ -554,10 +554,10 @@
       const liveTag = g ? `<span class="tag gone ${g.keeper ? 'kept' : 'sold'}" title="${g.keeper ? 'kept' : 'sold'} · ${esc(g.team)} · $${g.cost}">${g.keeper ? 'KEPT' : 'SOLD'} ${esc(g.team)} $${g.cost}</span>`
         : `<span class="tag ${posClass(p.pos)}" title="${esc(p.pos)}${p.compRank} of the ${esc(p.pos)}s still available">${esc(p.pos)}${byPosView && !showAll ? '' : p.compRank}</span>`;
       const preTag = !g && p.preRank && p.preRank !== p.compRank && !(byPosView && showAll) ? `<span class="tag pre" title="preseason: ${esc(p.pos)}${p.preRank} with every player on the board">pre ${p.preRank}</span>` : '';
-      return head + `<tr class="row${g ? ' gone' : ''}${p.cliff && byPosView ? ' cliff' : ''}${watch.has(p.name) ? ' watched' : ''}${open ? ' open' : ''}" data-n="${esc(p.name)}">
+      return head + `<tr class="row${i % 2 ? ' alt' : ''}${g ? ' gone' : ''}${p.cliff && byPosView ? ' cliff' : ''}${watch.has(p.name) ? ' watched' : ''}${open ? ' open' : ''}" data-n="${esc(p.name)}">
         <td class="w">${g ? '' : `<button type="button" class="star${watch.has(p.name) ? ' on' : ''}" data-w="${esc(p.name)}" title="Watch list">★</button>`}</td>
         <td class="rk">${rk}</td>
-        <td class="pl"><div class="plx"><span class="nm">${esc(p.name)}</span>${injFlag(p)}${liveTag}${preTag}${p.nfl ? `<span class="tag tm">${esc(p.nfl)}</span>` : ''}</div></td>
+        <td class="pl"><div class="plx"><span class="nm">${esc(p.name)}</span>${injFlag(p)}<span class="tags">${liveTag}${preTag}${p.nfl ? `<span class="tag tm">${esc(p.nfl)}</span>` : ''}</span></div></td>
         <td class="model">${g ? '' : money(p.model)}</td>
         <td class="you${!g && p.payTo > p.model ? ' up' : !g && p.payTo < p.model ? ' down' : ''}">${g ? '' : you}</td>
         <td class="mkt">${g ? `<span class="paid">$${g.cost}</span>` : money(p.mkt) + edgeHtml(p.edge)}</td>

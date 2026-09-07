@@ -344,3 +344,39 @@ table.list .plx .tag.gone { color:var(--gold); text-transform:none; letter-spaci
 table.list .plx .tag.gone.sold { color:var(--soft); }
 table.list td.mkt .paid { font-family:var(--display); font-weight:700; font-size:14px; color:var(--soft); }
 @media (max-width:640px) { table.list .plx .tag.gone { font-size:9px; } }
+
+/* ---- polish: the list reads the same on a phone and an iPad ---- */
+/* wide screens: the tags follow the name instead of drifting toward the money */
+table.list .plx .nm { flex:0 1 auto; }
+table.list .plx::after { content:''; flex:1 1 auto; }
+/* faint zebra so the eye can track a row across */
+table.list tr.row.alt td { background:rgba(255,255,255,.018); }
+table.list tr.row.alt.open td { background:rgba(255,255,255,.03); }
+/* phones: search on its own line, compact controls, more room for the name */
+@media (max-width:640px) {
+  .tools { flex-wrap:wrap; gap:6px; padding:8px 10px 0; }
+  .tools input { flex:1 1 100%; }
+  .tools .dm { font-size:9.5px; padding:6px 8px; letter-spacing:.06em; white-space:nowrap; }
+  .tools .count { margin-left:auto; font-size:10px; }
+  table.list th { padding:6px 4px; }
+  table.list td.w { padding-left:2px; padding-right:0; } table.list .star { font-size:15px; padding:2px 3px; }
+  table.list td.rk { font-size:10px; padding-left:2px; padding-right:3px; }
+  table.list .plx { gap:5px; } table.list .plx .tag { font-size:8.5px; letter-spacing:.04em; } table.list .plx .nm { font-size:13.5px; }
+  table.list .plx .tag.pre { font-size:8px; }
+  table.list td.model { font-size:15px; padding-left:3px; padding-right:3px; }
+  table.list td.you { font-size:13.5px; padding-left:3px; padding-right:3px; }
+  table.list td.mkt { font-size:13.5px; padding-left:3px; padding-right:5px; }
+  table.list td.mkt .pos-edge, table.list td.mkt .neg-edge, table.list td.mkt .zero-edge { font-size:9.5px; }
+  .seat-in { gap:10px 12px; padding:7px 10px; } .seat-n.big b { font-size:24px; } .seat-n b { font-size:18px; }
+}
+
+/* tags grouped: beside the name on wide screens, under it on phones so the name never truncates */
+table.list .plx .tags { display:flex; align-items:baseline; gap:7px; flex:0 0 auto; }
+table.list .plx::after { display:none; }
+@media (max-width:640px) {
+  table.list .plx { flex-wrap:wrap; row-gap:0; }
+  table.list .plx .nm { flex:0 1 auto; max-width:calc(100% - 22px); }   /* the cross hugs the name */
+  table.list .plx .tags { flex:1 1 100%; gap:6px; margin-top:-1px; }
+  table.list .plx .tags .tag { margin-left:0; }
+  table.list tr.row td { padding-top:4px; padding-bottom:4px; }
+}
