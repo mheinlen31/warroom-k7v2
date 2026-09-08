@@ -244,14 +244,29 @@ window.GuideModel = (function () {
     const order = (state && state.nomOrder) || [];
     let nominator = null, untilMe = null;
     if (order.length && teams.length) {
-      const n = order.length, picksN = ((state && state.picks) || []).length;
-      const idx = (((picksN + ((state && state.nomOffset) || 0)) % n) + n) % n;
-      const team = teams.find((t) => t.ti === order[idx]) || teams[order[idx]];
+      // same replay as the board: a full roster drops out of the rotation
+      const n = order.length, picks = (state && state.picks) || [];
+      const tiOf = (t, i) => (t.ti != null ? t.ti : i);
+      const filled = {}; teams.forEach((t, i) => { filled[tiOf(t, i)] = (t.players || []).filter((p) => p.keeper).length; });
+      const active = (ti) => (filled[ti] || 0) < E.ROSTER_SIZE;
+      let ptr = ((((state && state.nomOffset) || 0) % n) + n) % n, cur = null;
+      for (let i = 0; i <= picks.length; i++) {
+        let guard = 0;
+        while (!active(order[ptr % n]) && guard++ < n) ptr++;
+        if (guard >= n) break;
+        if (i === picks.length) { cur = order[ptr % n]; break; }
+        filled[picks[i].ti] = (filled[picks[i].ti] || 0) + 1;
+        ptr++;
+      }
+      const team = cur == null ? null : (teams.find((t, i) => tiOf(t, i) === cur) || null);
       nominator = team ? team.name : null;
       const mineT = teams.find((t) => t.name === myName);
-      const myTi = mineT ? (mineT.ti != null ? mineT.ti : teams.indexOf(mineT)) : -1;
-      const at = order.indexOf(myTi);
-      if (at >= 0) untilMe = (((at - idx) % n) + n) % n;
+      const myTi = mineT ? tiOf(mineT, teams.indexOf(mineT)) : -1;
+      if (cur != null && order.includes(myTi) && active(myTi)) {
+        let k = 0, p = ptr, guard = 0;
+        while (guard++ < 2 * n) { const ti = order[p % n]; if (active(ti)) { if (ti === myTi) break; k++; } p++; }
+        untilMe = k;
+      }
     }
 
     // ---- composite order within each position (the board's default) ----
